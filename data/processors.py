@@ -2,6 +2,16 @@ import librosa
 import torch
 import numpy as np
 from typing import Union, List
+from transformers import AutoTokenizer
+
+TOKENIZERS_CACHE = {}
+
+def get_tokenizer(name):
+    if name not in TOKENIZERS_CACHE:
+        tokenizer = AutoTokenizer.from_pretrained(name, use_fast=True)
+        tokenizer.pad_token = tokenizer.eos_token
+        TOKENIZERS_CACHE[name] = tokenizer
+    return TOKENIZERS_CACHE[name]
 
 def get_audio_processor(sample_rate: int = 16000, max_length: float = 10.0):
     """获取音频处理器"""
