@@ -18,10 +18,11 @@ torch.manual_seed(0)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(0)
 
-from data.collators import VQACollator, MMStarCollator
-from data.datasets import MMStarDataset, VQADataset
-from data.processors import get_image_processor, get_tokenizer
-from models.vision_language_model import VisionLanguageModel
+from data.collators import AudioQACollator, SAVEECollator
+from data.datasets import SAVEEDataset, AudioQADataset
+from data.audio_processors import get_audio_processor
+from data.processors import get_tokenizer
+from models.audio_language_model import AudioLanguageModel
 import models.config as config
 import models.utils as utils
 
@@ -71,10 +72,10 @@ def get_run_name(train_cfg):
 
     return f"nanoVLM_{num_gpus}_{dataset_size}_{batch_size}_{epochs}_{learning_rate}_{date}"
 
-def get_dataloaders(train_cfg, vlm_cfg):
+def get_dataloaders(train_cfg, alm_cfg):
     # Create datasets
-    image_processor = get_image_processor(vlm_cfg.vit_img_size)
-    tokenizer = get_tokenizer(vlm_cfg.lm_tokenizer)
+    audio_processor = get_audio_processor(alm_cfg.audio_sample_rate)
+    tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
 
     # Load and combine all training datasets
     combined_train_data = []
@@ -95,13 +96,13 @@ def get_dataloaders(train_cfg, vlm_cfg):
     val_size = int(total_samples * train_cfg.val_ratio)
     train_size = total_samples - val_size
 
-    train_dataset = VQADataset(train_ds.select(range(train_size)), tokenizer, image_processor)
-    val_dataset = VQADataset(train_ds.select(range(train_size, total_samples)), tokenizer, image_processor)
-    test_dataset = MMStarDataset(test_ds['val'], tokenizer, image_processor)
+    train_dataset = AudioQADataset(train_ds.select(range(train_size)), tokenizer, audio_processor)
+    val_dataset = AudioQADataset(train_ds.select(range(train_size, total_samples)), tokenizer, audio_processor)
+    test_dataset = SAVEEDataset(test_ds['val'], tokenizer, audio_processor)
 
     # Create collators
-    vqa_collator = VQACollator(tokenizer, vlm_cfg.lm_max_length)
-    mmstar_collator = MMStarCollator(tokenizer)
+    vqa_collator = AudioQACollator(tokenizer, alm_cfg.lm_max_length)
+    savee_collator = SAVEECollator(tokenizer)
 
     g = torch.Generator()
     g.manual_seed(0)
@@ -146,9 +147,9 @@ def get_dataloaders(train_cfg, vlm_cfg):
 
     test_loader = DataLoader(
         test_dataset, 
-        batch_size=train_cfg.mmstar_batch_size, 
+        batch_size=train_cfg.savee_batch_size, 
         shuffle=False, 
-        collate_fn=mmstar_collator,
+        collate_fn=savee_collator,
         pin_memory=True,
         worker_init_fn=seed_worker,
         generator=g,
@@ -156,7 +157,7 @@ def get_dataloaders(train_cfg, vlm_cfg):
 
     return train_loader, val_loader, test_loader
 
-def test_mmstar(model, tokenizer, test_loader, device):
+def test_savee(model, tokenizer, test_loader, device):
     total_examples = 0
     correct_predictions = 0
     with torch.no_grad():
@@ -196,9 +197,9 @@ def get_lr(it, max_lr, max_steps):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff starts at 1 and goes to 0
     return min_lr + coeff * (max_lr - min_lr)
 
-def train(train_cfg, vlm_cfg):
-    train_loader, val_loader, test_loader = get_dataloaders(train_cfg, vlm_cfg)
-    tokenizer = get_tokenizer(vlm_cfg.lm_tokenizer)
+def train(train_cfg, alm_cfg):
+    train_loader, val_loader, test_loader = get_dataloaders(train_cfg, alm_cfg)
+    tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
 
     total_dataset_size = len(train_loader.dataset)
     if train_cfg.log_wandb and is_master():
@@ -209,7 +210,7 @@ def train(train_cfg, vlm_cfg):
             entity=train_cfg.wandb_entity,
             project="nanoVLM",
             config={
-                "VLMConfig": asdict(vlm_cfg),
+                "ALMConfig": asdict(alm_cfg),
                 "TrainConfig": asdict(train_cfg)
             },
             name=run_name,
@@ -217,9 +218,9 @@ def train(train_cfg, vlm_cfg):
 
     # Initialize model
     if train_cfg.resume_from_vlm_checkpoint:
-        model = VisionLanguageModel.from_pretrained(vlm_cfg.vlm_checkpoint_path)
+        model = AudioLanguageModel.from_pretrained(alm_cfg.alm_checkpoint_path)
     else:
-        model = VisionLanguageModel(vlm_cfg, load_backbone=vlm_cfg.vlm_load_backbone_weights)
+        model = AudioLanguageModel(alm_cfg, load_backbone=alm_cfg.vlm_load_backbone_weights)
     
     if is_master():
         print(f"nanoVLM initialized with {sum(p.numel() for p in model.parameters()):,} parameters") 
@@ -316,7 +317,7 @@ def train(train_cfg, vlm_cfg):
             total_train_loss += batch_loss
 
             num_tokens = torch.sum(attention_mask).item() # Sum of attention mask gives number of tokens
-            num_tokens += images.shape[0] * ((images.shape[2] / vlm_cfg.vit_patch_size) ** 2) / (vlm_cfg.mp_pixel_shuffle_factor ** 2) # Add image tokens = batch_size * (((img_size / patch_size) ** 2) / (pixel_shuffle_factor ** 2))
+            num_tokens += images.shape[0] * ((images.shape[2] / alm_cfg.audio_patch_size) ** 2) / (alm_cfg.mp_pixel_shuffle_factor ** 2) # Add image tokens = batch_size * (((img_size / patch_size) ** 2) / (pixel_shuffle_factor ** 2))
             total_tokens_processed += num_tokens
 
             batch_end_time = time.time()
@@ -350,10 +351,10 @@ def train(train_cfg, vlm_cfg):
 
                     if is_master() and global_step % (train_cfg.eval_interval*2) == 0:
                         eval_model = model.module if is_dist() else model  # unwrap the model for eval if DDP
-                        epoch_accuracy = test_mmstar(eval_model, tokenizer, test_loader, device)
+                        epoch_accuracy = test_savee(eval_model, tokenizer, test_loader, device)
                         if epoch_accuracy > best_accuracy:
                             best_accuracy = epoch_accuracy
-                            eval_model.save_pretrained(save_directory=vlm_cfg.vlm_checkpoint_path)
+                            eval_model.save_pretrained(save_directory=alm_cfg.alm_checkpoint_path)
                         if train_cfg.log_wandb and is_master():    
                             run.log({"accuracy": epoch_accuracy}, step=global_step)
                         print(f"Step: {global_step}, Loss: {batch_loss:.4f}, Tokens/s: {tokens_per_second:.2f}, Accuracy: {epoch_accuracy:.4f}")
@@ -402,54 +403,54 @@ def train(train_cfg, vlm_cfg):
         print(f"Average time per sample: {avg_time_per_sample:.4f}s")
 
         # Push the best model to the hub (Please set your user name in the config!)
-        if vlm_cfg.hf_repo_name is not None:
+        if alm_cfg.hf_repo_name is not None:
             print("Training complete. Pushing model to Hugging Face Hub...")
-            hf_model = VisionLanguageModel.from_pretrained(vlm_cfg.vlm_checkpoint_path)
-            hf_model.push_to_hub(vlm_cfg.hf_repo_name)
+            hf_model = AudioLanguageModel.from_pretrained(alm_cfg.alm_checkpoint_path)
+            hf_model.push_to_hub(alm_cfg.hf_repo_name)
 
         if train_cfg.log_wandb:
             run.summary["avg_epoch_time"] = avg_epoch_time
             run.summary["avg_time_per_sample"] = avg_time_per_sample
-            run.summary["mmstar_acc"] = best_accuracy
+            run.summary["savee_acc"] = best_accuracy
             run.finish()
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lr_mp', type=float, help='Learning rate for the mapping network')
     parser.add_argument('--lr_backbones', type=float, help='Learning rate for the backbones')
-    parser.add_argument('--vlm_checkpoint_path', type=str, help='Path to the VLM checkpoint for loading or saving')
+    parser.add_argument('--alm_checkpoint_path', type=str, help='Path to the ALM checkpoint for loading or saving')
     parser.add_argument('--compile', type=bool, help='Use torch.compile to optimize the model')
-    parser.add_argument('--resume_from_vlm_checkpoint', type=bool, default=False, help='Resume training from VLM checkpoint specified by vlm_checkpoint_path (or default if not provided)')
+    parser.add_argument('--resume_from_alm_checkpoint', type=bool, default=False, help='Resume training from ALM checkpoint specified by alm_checkpoint_path (or default if not provided)')
 
     args = parser.parse_args()
 
-    vlm_cfg = config.VLMConfig()
+    alm_cfg = config.ALMConfig()
     train_cfg = config.TrainConfig()
 
     if args.lr_mp is not None:
         train_cfg.lr_mp = args.lr_mp
     if args.lr_backbones is not None:
         train_cfg.lr_backbones = args.lr_backbones
-    if args.vlm_checkpoint_path is not None:
-        vlm_cfg.vlm_checkpoint_path = args.vlm_checkpoint_path
+    if args.alm_checkpoint_path is not None:
+        alm_cfg.alm_checkpoint_path = args.alm_checkpoint_path
     if args.compile is not None:
         train_cfg.compile = args.compile
 
-    if args.resume_from_vlm_checkpoint and args.vlm_checkpoint_path is not None:
+    if args.resume_from_vlm_checkpoint and args.alm_checkpoint_path is not None:
         train_cfg.resume_from_vlm_checkpoint = True
         # When resuming a full VLM, we don't need to load individual backbone weights from original sources
-        vlm_cfg.vlm_load_backbone_weights = False
+        alm_cfg.vlm_load_backbone_weights = False
 
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         init_dist()
 
     if is_master():
         print("--- VLM Config ---")
-        print(vlm_cfg)
+        print(alm_cfg)
         print("--- Train Config ---")
         print(train_cfg)
 
-    train(train_cfg, vlm_cfg)
+    train(train_cfg, alm_cfg)
 
     if is_dist():
         destroy_dist()

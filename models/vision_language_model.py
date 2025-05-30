@@ -9,7 +9,7 @@ from models.utils import top_k_top_p_filtering
 from models.vision_transformer import ViT
 from models.language_model import LanguageModel
 from models.modality_projector import ModalityProjector
-from models.config import VLMConfig
+from models.config import ALMConfig
 
 import torch
 import torch.nn as nn
@@ -17,7 +17,7 @@ import torch.nn.functional as F
 from safetensors.torch import load_model, save_model
 
 class VisionLanguageModel(nn.Module):
-    def __init__(self, cfg: VLMConfig, load_backbone=True):
+    def __init__(self, cfg: ALMConfig, load_backbone=True):
         super().__init__()
         self.cfg = cfg
         if load_backbone:
@@ -152,7 +152,7 @@ class VisionLanguageModel(nn.Module):
 
         # Load config
         with open(config_path, "r") as f:
-            cfg = VLMConfig(**json.load(f))
+            cfg = ALMConfig(**json.load(f))
 
         # Initialize model without loading the backbone
         model = cls(cfg, load_backbone=False)

@@ -1,18 +1,23 @@
 from dataclasses import dataclass
 
-
 @dataclass
-class VLMConfig:
-    vit_hidden_dim: int = 768
-    vit_inter_dim: int = 4 * vit_hidden_dim
-    vit_patch_size: int = 16
-    vit_img_size: int = 224
-    vit_n_heads: int = 12
-    vit_dropout: float = 0.0
-    vit_n_blocks: int = 12
-    vit_ln_eps: float = 1e-6
-    vit_cls_flag: bool = False
-    vit_model_type: str = 'google/siglip-base-patch16-224'
+class ALMConfig:
+    # 将原来的vit_相关配置改为audio_相关配置
+    audio_hidden_dim: int = 768
+    audio_inter_dim: int = 4 * audio_hidden_dim
+    audio_patch_size: int = 16  # 音频patch大小（时间步数）
+    audio_n_heads: int = 12
+    audio_dropout: float = 0.0
+    audio_n_blocks: int = 12
+    audio_ln_eps: float = 1e-6
+    audio_model_type: str = 'custom_audio_transformer'
+    
+    # 音频处理相关参数
+    audio_sample_rate: int = 16000  # 采样率
+    audio_n_fft: int = 400  # FFT窗口大小
+    audio_hop_length: int = 160  # 跳跃长度
+    audio_n_mels: int = 80  # 梅尔滤波器数量
+    audio_max_length: int = 1000  # 最大时间步数
 
     lm_hidden_dim: int = 576
     lm_inter_dim: int = 1536
@@ -34,11 +39,17 @@ class VLMConfig:
     lm_tokenizer: str = 'HuggingFaceTB/cosmo2-tokenizer'
     lm_eos_token_id: int = 0
 
+    # 模态投影器配置
     mp_pixel_shuffle_factor: int = 2
 
-    vlm_load_backbone_weights: bool = True
-    vlm_checkpoint_path: str = 'checkpoints/nanoVLM-222M'
-    hf_repo_name: str = 'nanoVLM'
+    # 音频语言模型配置
+    alm_load_backbone_weights: bool = True
+    alm_checkpoint_path: str = 'checkpoints/nanoALM-222M'
+    
+    # 音频token长度（替代原来的IMAGE_TOKEN_LENGTH）
+    AUDIO_TOKEN_LENGTH: int = 62  # audio_max_length // audio_patch_size
+    TOTAL_SEQUENCE_LENGTH: int = 128
+    lm_max_length: int = TOTAL_SEQUENCE_LENGTH - AUDIO_TOKEN_LENGTH
 
 
 @dataclass
@@ -49,15 +60,15 @@ class TrainConfig:
     val_ratio: float = 0.025
     batch_size: int = 256
     gradient_accumulation_steps: int = 1
-    mmstar_batch_size: int = 32
+    savee_batch_size: int = 32
     max_grad_norm: float = None
     eval_in_epochs: bool = True
     eval_interval: int = 250
     epochs: int = 5
     compile: bool = False
     resume_from_vlm_checkpoint: bool = False # Indicate if the training should be resumed from a checkpoint of the whole VLM or you want to start from scratch
-    train_dataset_path: str = 'HuggingFaceM4/the_cauldron'
+    train_dataset_path: str = 'AbstractTTS/IEMOCAP'
     train_dataset_name: tuple[str, ...] = ("ai2d", "aokvqa", "chart2text", "chartqa", "clevr", "cocoqa", "datikz", "diagram_image_to_text", "docvqa", "dvqa", "figureqa", "finqa", "geomverse", "hateful_memes", "hitab", "iam", "iconqa", "infographic_vqa", "intergps", "localized_narratives", "mapqa", "multihiertt", "ocrvqa", "plotqa", "raven", "rendered_text", "robut_sqa", "robut_wikisql", "robut_wtq", "scienceqa", "screen2words", "st_vqa", "tabmwp", "tallyqa", "tat_qa", "textcaps", "textvqa", "tqa", "vistext", "visual7w", "visualmrc", "vqarad", "vqav2", "vsr", "websight")
-    test_dataset_path: str = "Lin-Chen/MMStar"
+    test_dataset_path: str = "AbstractTTS/SAVEE"
     wandb_entity: str = "HuggingFace" # Indicate the entity to log to in wandb
     log_wandb: bool = True

@@ -8,8 +8,8 @@ torch.manual_seed(0)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(0)
 
-from data.collators import VQACollator
-from data.datasets import VQADataset
+from data.collators import AudioQACollator
+from data.datasets import AudioQADataset
 from data.processors import get_image_processor, get_tokenizer
 from models.vision_language_model import VisionLanguageModel
 import models.config as config
@@ -17,7 +17,7 @@ import models.config as config
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def measure_vram(args, vlm_cfg, train_cfg_defaults):
+def measure_vram(args, alm_cfg, train_cfg_defaults):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not torch.cuda.is_available():
         print("CUDA not available. VRAM measurement requires a CUDA-enabled GPU.")
@@ -25,8 +25,8 @@ def measure_vram(args, vlm_cfg, train_cfg_defaults):
 
     # --- Model Initialization ---
     torch.cuda.reset_peak_memory_stats(device)
-    print(f"Using VLMConfig defaults: load_backbone_weights={vlm_cfg.vlm_load_backbone_weights}")
-    model = VisionLanguageModel(vlm_cfg, load_backbone=vlm_cfg.vlm_load_backbone_weights)
+    print(f"Using ALMConfig defaults: load_backbone_weights={alm_cfg.vlm_load_backbone_weights}")
+    model = VisionLanguageModel(alm_cfg, load_backbone=alm_cfg.vlm_load_backbone_weights)
 
     if args.compile:
         print("Compiling the model with torch.compile...")
@@ -44,8 +44,8 @@ def measure_vram(args, vlm_cfg, train_cfg_defaults):
     print(f"Model initialized with {sum(p.numel() for p in model.parameters()):,} parameters")
 
     # --- Dataset Preparation ---
-    image_processor = get_image_processor(vlm_cfg.vit_img_size)
-    tokenizer = get_tokenizer(vlm_cfg.lm_tokenizer)
+    image_processor = get_image_processor(alm_cfg.vit_img_size)
+    tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
 
     dataset_path = train_cfg_defaults.train_dataset_path
     # train_cfg_defaults.train_dataset_name is a list, use the first if not specified
@@ -81,8 +81,8 @@ def measure_vram(args, vlm_cfg, train_cfg_defaults):
         print("Please ensure the dataset path and name are correct.")
         return
 
-    processed_base_dataset = VQADataset(base_ds_for_vram_test, tokenizer, image_processor)
-    vqa_collator = VQACollator(tokenizer, vlm_cfg.lm_max_length)
+    processed_base_dataset = AudioQADataset(base_ds_for_vram_test, tokenizer, image_processor)
+    vqa_collator = AudioQACollator(tokenizer, alm_cfg.lm_max_length)
 
     print("\n--- VRAM Measurement ---")
     results = {}
@@ -185,16 +185,16 @@ def main():
 
     args = parser.parse_args()
 
-    vlm_cfg = config.VLMConfig()
+    alm_cfg = config.ALMConfig()
     train_cfg_defaults = config.TrainConfig() # Used for default dataset path/name if not provided by CLI
 
     print("--- VLM Config (from models.config) ---")
-    print(vlm_cfg) # Show base config
+    print(alm_cfg) # Show base config
     print("--- Train Config Defaults (for dataset path/name if not specified via CLI) ---")
     print(f"Default dataset_path: {train_cfg_defaults.train_dataset_path}")
     print(f"Default dataset_name list: {train_cfg_defaults.train_dataset_name}")
     
-    measure_vram(args, vlm_cfg, train_cfg_defaults)
+    measure_vram(args, alm_cfg, train_cfg_defaults)
 
 if __name__ == "__main__":
     main() 

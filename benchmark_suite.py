@@ -8,7 +8,7 @@ from PIL import Image
 import pandas as pd
 
 from models.vision_language_model import VisionLanguageModel
-from models.config import VLMConfig
+from models.config import ALMConfig
 from data.processors import get_tokenizer, get_image_processor
 
 # Ensure reproducibility
@@ -37,7 +37,7 @@ def benchmark_vlm(
         torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats(device)
 
-    cfg = VLMConfig(
+    cfg = ALMConfig(
         vit_model_type=vit_model_type,
         lm_model_type=lm_model_type,
         lm_tokenizer=lm_tokenizer_path,

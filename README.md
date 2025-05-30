@@ -21,7 +21,7 @@ Similar to Andrej Karpathy's nanoGPT, we wanted to equip the community with a ve
 ## What can nanoVLM do?
 
 The model definition and training logic of this repository fits in ~750 lines, with some more boilerplate logging and parameter loading. 
-Using the [`SigLIP-B/16-224-85M`](https://huggingface.co/google/siglip-base-patch16-224) and [`HuggingFaceTB/SmolLM2-135M`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M) as backbones results in a **222M** nanoVLM. Training this for ~6h on a single H100 GPU on ~1.7M samples of [the cauldron](https://huggingface.co/datasets/HuggingFaceM4/the_cauldron) results in an accuracy of 35.3% on MMStar.
+Using the [`SigLIP-B/16-224-85M`](https://huggingface.co/google/siglip-base-patch16-224) and [`HuggingFaceTB/SmolLM2-135M`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M) as backbones results in a **222M** nanoVLM. Training this for ~6h on a single H100 GPU on ~1.7M samples of [the cauldron](https://huggingface.co/datasets/HuggingFaceM4/the_cauldron) results in an accuracy of 35.3% on SAVEE.
 
 ![loss](assets/nanoVLM-222M-loss.png)
 
@@ -183,7 +183,7 @@ We provide a script `measure_vram.py` that allows you to test VRAM requirements 
 
 To use it:
 1. Ensure you have a CUDA-enabled GPU and PyTorch installed.
-2. Run the script with your desired batch sizes. You can also specify a model checkpoint if you have one, or let it initialize a new model based on the default `VLMConfig`.
+2. Run the script with your desired batch sizes. You can also specify a model checkpoint if you have one, or let it initialize a new model based on the default `ALMConfig`.
 
 ```bash
 # Example: Test batch sizes 1, 2, 4, 8 with a new default model
@@ -209,7 +209,7 @@ We welcome contributions to nanoVLM! However, to maintain the repository's focus
 
 Here are some areas we're looking to work on in the near future. Contributions in these areas are particularly welcome:
 
-*   **Evaluations:** Implementing more evaluations or improving our MMStar implementation (highly valued)
+*   **Evaluations:** Implementing more evaluations or improving our SAVEE implementation (highly valued)
 *   **Data Packing:** Implementing a way to create packs of a given size from the input data to optimize training.
 *   **Multi-gpu training:** Training on several GPUs
 *   **Multi-image support:** Training with several images
