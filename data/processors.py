@@ -29,7 +29,7 @@ class AudioProcessor:
         self.max_length = max_length
         self.max_samples = int(sample_rate * max_length)
     
-    def __call__(self, audio_path: str) -> torch.Tensor:
+    def __call__(self, audio_array: str) -> torch.Tensor:
         """
         处理音频文件
         Args:
@@ -38,7 +38,7 @@ class AudioProcessor:
             torch.Tensor: 处理后的音频张量 [max_samples]
         """
         # 加载音频
-        audio, sr = librosa.load(audio_path, sr=self.sample_rate)
+        audio, sr = librosa.load(audio_array, sr=self.sample_rate)
         
         # 截断或填充到固定长度
         if len(audio) > self.max_samples:
