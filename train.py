@@ -98,7 +98,7 @@ def get_dataloaders(train_cfg, alm_cfg):
 
     train_dataset = AudioQADataset(train_ds.select(range(train_size)), tokenizer, audio_processor)
     val_dataset = AudioQADataset(train_ds.select(range(train_size, total_samples)), tokenizer, audio_processor)
-    test_dataset = SAVEEDataset(test_ds['val'], tokenizer, audio_processor)
+    test_dataset = SAVEEDataset(test_ds, tokenizer, audio_processor)
 
     # Create collators
     vqa_collator = AudioQACollator(tokenizer, alm_cfg.lm_max_length)

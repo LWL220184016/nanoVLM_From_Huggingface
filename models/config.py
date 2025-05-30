@@ -68,7 +68,7 @@ class TrainConfig:
     compile: bool = False
     resume_from_vlm_checkpoint: bool = False # Indicate if the training should be resumed from a checkpoint of the whole VLM or you want to start from scratch
     train_dataset_path: str = 'AbstractTTS/IEMOCAP'
-    train_dataset_name: tuple[str, ...] = ('default', )
+    train_dataset_name: tuple[str, ...] = ('all_data', )
     test_dataset_path: str = "AbstractTTS/SAVEE"
     wandb_entity: str = "HuggingFace" # Indicate the entity to log to in wandb
     log_wandb: bool = True
