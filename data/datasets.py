@@ -16,11 +16,11 @@ class AudioQADataset(Dataset): # https://huggingface.co/datasets/AbstractTTS/IEM
         item = self.dataset[idx]
         
         # 处理音频
-        audio = item['audio']  # 假设数据集包含音频路径
-        original_sampling_rate = item['sampling_rate']
+        audio_feature_dict = item['audio'] # Get the dictionary containing audio data
+        raw_audio_array = audio_feature_dict['array']
+        original_sampling_rate = audio_feature_dict['sampling_rate'] # <--- 修正點
 
-        processed_audio = self.audio_processor(audio['array'], original_sampling_rate)
-        
+        processed_audio = self.audio_processor(raw_audio_array, original_sampling_rate)
         
         return {
             "audio": processed_audio,
@@ -41,10 +41,11 @@ class SAVEEDataset(Dataset):  # https://huggingface.co/datasets/AbstractTTS/SAVE
     def __getitem__(self, idx):
         item = self.dataset[idx]
         
-        audio = item['audio']  # 假设数据集包含音频路径
-        original_sampling_rate = item['sampling_rate']
+        audio_feature_dict = item['audio'] # Get the dictionary containing audio data
+        raw_audio_array = audio_feature_dict['array']
+        original_sampling_rate = audio_feature_dict['sampling_rate'] # <--- 修正點
 
-        processed_audio = self.audio_processor(audio['array'], original_sampling_rate)
+        processed_audio = self.audio_processor(raw_audio_array, original_sampling_rate)
         transcription = item['transcription'] + self.tokenizer.eos_token # Add EOS token to the answer to train model to predict it, enabling correct stopping during generation
         
         return {

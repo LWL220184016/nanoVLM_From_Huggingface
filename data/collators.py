@@ -6,17 +6,18 @@ class AudioQACollator(object):
         self.max_length = max_length
 
     def __call__(self, batch):
-        audios = [item["audio"] for item in batch]
-        texts = [item["text_data"] for item in batch]
-        answers = [item["answer"] for item in batch]
+        audio_data = [item["processed_audio"] for item in batch]
+        genders = [item["gender"] for item in batch]
+        transcriptions = [item["transcription"] for item in batch]
+        major_emotions = [item["major_emotion"] for item in batch]
 
         # 堆叠音频
-        audios = torch.stack(audios)
+        audios = torch.stack(audio_data)
 
         # 创建输入序列
         input_sequences = []
-        for i in range(len(texts)):
-            input_sequences.append(f"{texts[i]}{answers[i]}")
+        for i in range(len(transcriptions)):
+            input_sequences.append(f"{transcriptions[i]}{genders[i]}{major_emotions[i]}")
 
         encoded_full_sequences = self.tokenizer.batch_encode_plus(
             input_sequences,
@@ -33,19 +34,17 @@ class AudioQACollator(object):
         labels[:, :-1] = input_ids[:, 1:].clone()
         labels[:, -1] = -100
 
-        # 处理标签，只预测答案部分
+        # 处理标签，预测所有内容（转录、性别、情绪）
         original_lengths = [len(self.tokenizer.encode(seq)) for seq in input_sequences]
         
         for i in range(len(batch)):
-            question_length = len(self.tokenizer.encode(texts[i], add_special_tokens=False))
-            
             if original_lengths[i] > self.max_length:
                 labels[i, :] = -100
                 continue
             
-            first_token_pos = attention_mask[i].nonzero(as_tuple=True)[0][0].item()
-            question_end = first_token_pos + question_length - 1 
-            labels[i, :question_end] = -100
+            # Don't mask anything - predict the entire sequence
+            # The model will learn to generate transcription + gender + emotion
+            # Labels are already set correctly from input_ids
 
         return {
             "audio": audios,

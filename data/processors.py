@@ -38,7 +38,7 @@ class AudioProcessor:
             torch.Tensor: 处理后的音频张量 [max_samples]
         """
         # 加载音频
-        audio_array = librosa.resample(y=audio_array, orig_sr=input_sr, target_sr=self.sample_rate)
+        audio = librosa.resample(y=audio_array, orig_sr=input_sr, target_sr=self.sample_rate)
         
         # 截断或填充到固定长度
         if len(audio) > self.max_samples:
