@@ -16,7 +16,7 @@ import models.config as config
 import models.utils as utils
 
 from models.audio_language_model import AudioLanguageModel
-from data.audio_processors import get_audio_processor
+from data.processors import get_audio_processor
 from data.datasets import AudioQADataset
 from data.collators import AudioQACollator
 
@@ -54,7 +54,7 @@ def train(train_cfg, alm_cfg):
     
     # 训练循环
     for batch in train_loader:
-        audios = batch["audio"].to(device)  # 替代原来的images
+        audios = batch["audio"].to(device)  # 替代原来的audios
         input_ids = batch["input_ids"].to(device)
         labels = batch["labels"].to(device)
         attention_mask = batch["attention_mask"].to(device)

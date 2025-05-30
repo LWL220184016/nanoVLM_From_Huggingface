@@ -10,7 +10,7 @@ if torch.cuda.is_available():
 
 from data.collators import AudioQACollator
 from data.datasets import AudioQADataset
-from data.processors import get_image_processor, get_tokenizer
+from data.processors import get_audio_processor, get_tokenizer
 from models.vision_language_model import VisionLanguageModel
 import models.config as config
 
@@ -44,7 +44,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
     print(f"Model initialized with {sum(p.numel() for p in model.parameters()):,} parameters")
 
     # --- Dataset Preparation ---
-    image_processor = get_image_processor(alm_cfg.vit_img_size)
+    audio_processor = get_audio_processor(alm_cfg.audio_sample_rate_size)
     tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
 
     dataset_path = train_cfg_defaults.train_dataset_path
@@ -81,7 +81,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
         print("Please ensure the dataset path and name are correct.")
         return
 
-    processed_base_dataset = AudioQADataset(base_ds_for_vram_test, tokenizer, image_processor)
+    processed_base_dataset = AudioQADataset(base_ds_for_vram_test, tokenizer, audio_processor)
     vqa_collator = AudioQACollator(tokenizer, alm_cfg.lm_max_length)
 
     print("\n--- VRAM Measurement ---")
@@ -127,7 +127,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
                 if i >= num_iterations_for_vram:
                     break
                 
-                images = batch["image"].to(device)
+                audios = batch["audio"].to(device)
                 input_ids = batch["input_ids"].to(device)
                 labels = batch["labels"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
@@ -135,7 +135,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
                 optimizer.zero_grad(set_to_none=True)
 
                 with torch.autocast(device_type='cuda', dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16): # Doing autocast to stay close the train.py script
-                    _, loss = model(input_ids, images, attention_mask=attention_mask, targets=labels)
+                    _, loss = model(input_ids, audios, attention_mask=attention_mask, targets=labels)
                 
                 if loss is not None:
                     loss.backward()
@@ -162,7 +162,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
         finally:
             del current_loader, optimizer
             if 'loss' in locals() and loss is not None : del loss
-            if 'images' in locals(): del images
+            if 'audios' in locals(): del audios
             if 'input_ids' in locals(): del input_ids
             if 'labels' in locals(): del labels
             if 'attention_mask' in locals(): del attention_mask

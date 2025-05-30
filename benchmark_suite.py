@@ -9,7 +9,7 @@ import pandas as pd
 
 from models.vision_language_model import VisionLanguageModel
 from models.config import ALMConfig
-from data.processors import get_tokenizer, get_image_processor
+from data.processors import get_tokenizer, get_audio_processor
 
 # Ensure reproducibility
 torch.manual_seed(0)
@@ -17,11 +17,11 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(0)
 
 def benchmark_vlm(
-    vit_model_type: str,
+    audio_model_type: str,
     lm_model_type: str,
     lm_tokenizer_path: str,
     mp_pixel_shuffle_factor: int,
-    image_path: str,
+    audio_path: str,
     prompt: str,
     max_new_tokens: int,
     num_runs: int,
@@ -38,7 +38,7 @@ def benchmark_vlm(
         torch.cuda.reset_peak_memory_stats(device)
 
     cfg = ALMConfig(
-        vit_model_type=vit_model_type,
+        audio_model_type=audio_model_type,
         lm_model_type=lm_model_type,
         lm_tokenizer=lm_tokenizer_path,
         mp_pixel_shuffle_factor=mp_pixel_shuffle_factor,
@@ -46,8 +46,8 @@ def benchmark_vlm(
     )
     model = VisionLanguageModel(cfg, load_backbone=True).to(device).eval()
     tokenizer = get_tokenizer(cfg.lm_tokenizer)
-    vit_img_size = int(cfg.vit_model_type[-3:])  # Kinda hacky, works for siglip models
-    image_processor = get_image_processor(vit_img_size)
+    audio_sample_rate_size = int(cfg.audio_model_type[-3:])  # Kinda hacky, works for siglip models
+    audio_processor = get_audio_processor(audio_sample_rate_size)
 
     initial_vram_model_mb = 0
     if device.type == 'cuda':
@@ -60,19 +60,19 @@ def benchmark_vlm(
     encoded_batch = tokenizer.batch_encode_plus([template], return_tensors="pt")
     input_ids = encoded_batch['input_ids'].to(device)
     attention_mask = encoded_batch['attention_mask'].to(device)
-    pil_image = Image.open(image_path)
-    image_tensor = image_processor(pil_image).unsqueeze(0).to(device)
+    pil_audio = Image.open(audio_path)
+    audio_tensor = audio_processor(pil_audio).unsqueeze(0).to(device)
 
     # Warmup
     for _ in range(warmup_runs):
         # simplified warmup same as original...
-        image_embd = model.vision_encoder(image_tensor)
-        image_embd = model.MP(image_embd)
+        audio_embd = model.vision_encoder(audio_tensor)
+        audio_embd = model.MP(audio_embd)
         token_embd = model.decoder.token_embedding(input_ids)
-        combined = torch.cat((image_embd, token_embd), dim=1)
+        combined = torch.cat((audio_embd, token_embd), dim=1)
         mask = None
         if attention_mask is not None:
-            img_len = image_embd.size(1)
+            img_len = audio_embd.size(1)
             mask = torch.cat((torch.ones((1, img_len), device=device), attention_mask), dim=1)
         outputs = combined
         for _ in range(max_new_tokens):
@@ -98,7 +98,7 @@ def benchmark_vlm(
 
         # Vision encode
         start = time.perf_counter()
-        img_emb = model.vision_encoder(image_tensor)
+        img_emb = model.vision_encoder(audio_tensor)
         img_emb = model.MP(img_emb)
         if device.type == 'cuda': torch.cuda.synchronize()
         ve = time.perf_counter() - start
@@ -161,7 +161,7 @@ def benchmark_vlm(
 
     # Cleanup
     daresult = {
-            "vit_model_type": vit_model_type,
+            "audio_model_type": audio_model_type,
             "lm_model_type": lm_model_type,
             "mp_pixel_shuffle_factor": mp_pixel_shuffle_factor,
             "avg_vision_encoding_time": avg_ve,
@@ -171,7 +171,7 @@ def benchmark_vlm(
             "initial_vram_model_mb": initial_vram_model_mb,
             "avg_peak_vram_inference_mb": avg_peak,
     }
-    del model, tokenizer, image_processor
+    del model, tokenizer, audio_processor
     if device.type == 'cuda': torch.cuda.empty_cache()
     return daresult
 
@@ -179,7 +179,7 @@ def benchmark_vlm(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark VLM inference speed with JSON logging and analysis.")
 
-    parser.add_argument("--vit_model_types", type=str, nargs='+', default=["google/siglip2-base-patch16-256", "google/siglip2-base-patch16-512", "google/siglip2-so400m-patch16-512"],
+    parser.add_argument("--audio_model_types", type=str, nargs='+', default=["google/siglip2-base-patch16-256", "google/siglip2-base-patch16-512", "google/siglip2-so400m-patch16-512"],
                         help="List of ViT model identifiers.")
     parser.add_argument("--lm_model_types", type=str, nargs='+', default=["HuggingFaceTB/SmolLM2-135M", "HuggingFaceTB/SmolLM2-360M", "HuggingFaceTB/SmolLM2-1.7B"],
                         help="List of LLM model identifiers.")
@@ -187,9 +187,9 @@ if __name__ == "__main__":
                         help="LLM tokenizer identifier.")
     parser.add_argument("--mp_pixel_shuffle_factors", type=int, nargs='+', default=[1, 2, 4],
                         help="List of pixel shuffle factors.")
-    parser.add_argument("--image_path", type=str, default="assets/image.png",
-                        help="Path to the input image.")
-    parser.add_argument("--prompt", type=str, default="What is in this image?",
+    parser.add_argument("--audio_path", type=str, default="assets/audio.png",
+                        help="Path to the input audio.")
+    parser.add_argument("--prompt", type=str, default="What is in this audio?",
                         help="Prompt for the VLM.")
     parser.add_argument("--max_new_tokens", type=int, default=50,
                         help="Number of new tokens to generate.")
@@ -209,8 +209,8 @@ if __name__ == "__main__":
             existing_results_list = json.load(f)
             for r in existing_results_list:
                 # Ensure all necessary keys are present for a valid cached entry
-                if all(k in r for k in ['vit_model_type', 'mp_pixel_shuffle_factor', 'lm_model_type']):
-                    key = (r['vit_model_type'], r['mp_pixel_shuffle_factor'], r['lm_model_type'])
+                if all(k in r for k in ['audio_model_type', 'mp_pixel_shuffle_factor', 'lm_model_type']):
+                    key = (r['audio_model_type'], r['mp_pixel_shuffle_factor'], r['lm_model_type'])
                     cached_results[key] = r
                 else:
                     print(f"Warning: Skipping invalid or incomplete entry in '{results_file}': {r}")
@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
     # Generate combinations
     all_combinations = list(itertools.product(
-        args.vit_model_types,
+        args.audio_model_types,
         args.mp_pixel_shuffle_factors,
         args.lm_model_types
     ))
@@ -238,11 +238,11 @@ if __name__ == "__main__":
         else:
             print(f"\nBenchmarking ViT={vit}, pixel_shuffle={pixel_shuffle}, LLM={lm}")
             res = benchmark_vlm(
-                vit_model_type=vit,
+                audio_model_type=vit,
                 lm_model_type=lm,
                 lm_tokenizer_path=args.lm_tokenizer,
                 mp_pixel_shuffle_factor=pixel_shuffle,
-                image_path=args.image_path,
+                audio_path=args.audio_path,
                 prompt=args.prompt,
                 max_new_tokens=args.max_new_tokens,
                 num_runs=args.num_runs,

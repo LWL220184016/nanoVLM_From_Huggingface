@@ -110,7 +110,7 @@ class SAVEECollator(object):  # https://huggingface.co/datasets/AbstractTTS/SAVE
         # 这里假设如果启用了填充，分词器中已正确设置了 pad_token_id。
 
         return {
-            "audio": audio_tensors,                   # 音频张量 (修正了原代码中的 "images" 并使用了正确的变量名)
+            "audio": audio_tensors,                   # 音频张量 (修正了原代码中的 "audios" 并使用了正确的变量名)
             "input_ids": input_ids,                   # 分词后的目标文本序列 (包含转录、性别、情绪)
             "attention_mask": attention_mask,         # 对应 input_ids 的注意力掩码
             "labels": labels,                         # 用于训练语言模型部分的标签 (填充部分已设为 -100)

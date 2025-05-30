@@ -17,7 +17,7 @@ class AudioQADataset(Dataset): # https://huggingface.co/datasets/AbstractTTS/IEM
         
         # 处理音频
         audio = item['audio']  # 假设数据集包含音频路径
-        processed_audio = self.audio_processor(audio)
+        processed_audio = self.audio_processor(audio['path'])
         
         return {
             "audio": processed_audio,
@@ -41,8 +41,7 @@ class SAVEEDataset(Dataset):  # https://huggingface.co/datasets/AbstractTTS/SAVE
         audio = item['audio']
             
         # Now process the audio
-        processed_audio = self.audio_processor(audio)
-
+        processed_audio = self.audio_processor(audio['path'])
         transcription = item['transcription'] + self.tokenizer.eos_token # Add EOS token to the answer to train model to predict it, enabling correct stopping during generation
         
         return {

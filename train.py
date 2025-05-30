@@ -20,7 +20,7 @@ if torch.cuda.is_available():
 
 from data.collators import AudioQACollator, SAVEECollator
 from data.datasets import SAVEEDataset, AudioQADataset
-from data.audio_processors import get_audio_processor
+from data.processors import get_audio_processor
 from data.processors import get_tokenizer
 from models.audio_language_model import AudioLanguageModel
 import models.config as config
@@ -162,14 +162,14 @@ def test_savee(model, tokenizer, test_loader, device):
     correct_predictions = 0
     with torch.no_grad():
         for batch in test_loader:
-            image = batch['images'].to(device)
+            audio = batch['audios'].to(device)
             input_ids = batch['input_ids'].to(device)
             labels = batch['labels'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             
             correct_answer = tokenizer.batch_decode(labels, skip_special_tokens=True)
             
-            gen = model.generate(input_ids, image, attention_mask)
+            gen = model.generate(input_ids, audio, attention_mask)
             model_output = tokenizer.batch_decode(gen, skip_special_tokens=True)
             
             is_correct = utils.check_multiple_choice_with_regex(model_output, correct_answer)
@@ -268,7 +268,7 @@ def train(train_cfg, alm_cfg):
 
         for i, batch in enumerate(train_loader):
             batch_start_time = time.time()
-            images = batch["image"].to(device)
+            audios = batch["audio"].to(device)
             input_ids = batch["input_ids"].to(device)
             labels = batch["labels"].to(device)
             attention_mask = batch["attention_mask"].to(device)
@@ -293,7 +293,7 @@ def train(train_cfg, alm_cfg):
             with autocast_context:
 
                 with context:
-                    _, loss = model(input_ids, images, attention_mask=attention_mask, targets=labels)
+                    _, loss = model(input_ids, audios, attention_mask=attention_mask, targets=labels)
 
             if train_cfg.gradient_accumulation_steps > 1:
                 loss = loss / train_cfg.gradient_accumulation_steps
@@ -317,7 +317,7 @@ def train(train_cfg, alm_cfg):
             total_train_loss += batch_loss
 
             num_tokens = torch.sum(attention_mask).item() # Sum of attention mask gives number of tokens
-            num_tokens += images.shape[0] * ((images.shape[2] / alm_cfg.audio_patch_size) ** 2) / (alm_cfg.mp_pixel_shuffle_factor ** 2) # Add image tokens = batch_size * (((img_size / patch_size) ** 2) / (pixel_shuffle_factor ** 2))
+            num_tokens += audios.shape[0] * ((audios.shape[2] / alm_cfg.audio_patch_size) ** 2) / (alm_cfg.mp_pixel_shuffle_factor ** 2) # Add audio tokens = batch_size * (((img_size / patch_size) ** 2) / (pixel_shuffle_factor ** 2))
             total_tokens_processed += num_tokens
 
             batch_end_time = time.time()
@@ -335,13 +335,13 @@ def train(train_cfg, alm_cfg):
                 with torch.no_grad():
                     total_val_loss = 0
                     for batch in val_loader:
-                        images = batch["image"].to(device)
+                        audios = batch["audio"].to(device)
                         input_ids = batch["input_ids"].to(device)
                         labels = batch["labels"].to(device)
                         attention_mask = batch["attention_mask"].to(device)
 
                         with autocast_context:
-                            _, loss = model(input_ids, images, attention_mask=attention_mask, targets=labels)
+                            _, loss = model(input_ids, audios, attention_mask=attention_mask, targets=labels)
 
                         total_val_loss += loss.item()
                     avg_val_loss = total_val_loss / len(val_loader)

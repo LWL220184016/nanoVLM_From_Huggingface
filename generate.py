@@ -7,12 +7,12 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(0)
 
 from models.vision_language_model import VisionLanguageModel
-from data.processors import get_tokenizer, get_image_processor
+from data.processors import get_tokenizer, get_audio_processor
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Generate text from an image with nanoVLM")
+        description="Generate text from an audio with nanoVLM")
     parser.add_argument(
         "--checkpoint", type=str, default=None,
         help="Path to a local checkpoint (directory or safetensors/pth). If omitted, we pull from HF."
@@ -21,8 +21,8 @@ def parse_args():
         "--hf_model", type=str, default="lusxvr/nanoVLM-222M",
         help="HuggingFace repo ID to download from incase --checkpoint isnt set."
     )
-    parser.add_argument("--image", type=str, default="assets/image.png",
-                        help="Path to input image")
+    parser.add_argument("--audio", type=str, default="assets/audio.png",
+                        help="Path to input audio")
     parser.add_argument("--prompt", type=str, default="What is this?",
                         help="Text prompt to feed the model")
     parser.add_argument("--generations", type=int, default=5,
@@ -49,14 +49,14 @@ def main():
     model.eval()
 
     tokenizer = get_tokenizer(model.cfg.lm_tokenizer)
-    image_processor = get_image_processor(model.cfg.vit_img_size)
+    audio_processor = get_audio_processor(model.cfg.audio_sample_rate_size)
 
     template = f"Question: {args.prompt} Answer:"
     encoded = tokenizer.batch_encode_plus([template], return_tensors="pt")
     tokens = encoded["input_ids"].to(device)
 
-    img = Image.open(args.image).convert("RGB")
-    img_t = image_processor(img).unsqueeze(0).to(device)
+    img = Image.open(args.audio).convert("RGB")
+    img_t = audio_processor(img).unsqueeze(0).to(device)
 
     print("\nInput:\n ", args.prompt, "\n\nOutputs:")
     for i in range(args.generations):

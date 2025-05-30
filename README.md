@@ -57,8 +57,8 @@ pip install torch numpy torchvision pillow datasets huggingface-hub transformers
 Dependencies: 
 - `torch` <3
 - `numpy` <3
-- `torchvision` for the image processors
-- `pillow` for image loading
+- `torchvision` for the audio processors
+- `pillow` for audio loading
 - `datasets` for the training datasets
 - `huggingface-hub` & `transformers` to load the pretrained backbones
 - `wandb` for logging
@@ -84,7 +84,7 @@ or, to use distributed data parallel with 8 gpus, you can simply run:
 torchrun --nproc_per_node=8 train.py
 ```
 
-If we feed the example image in `assets/image.png` with a question into the model, we get the following output. Even after only short training, the model can recognize the cat in the picture. 
+If we feed the example audio in `assets/audio.png` with a question into the model, we get the following output. Even after only short training, the model can recognize the cat in the picture. 
 ```
 Input: 
 Image + 'What is this?'
@@ -212,8 +212,8 @@ Here are some areas we're looking to work on in the near future. Contributions i
 *   **Evaluations:** Implementing more evaluations or improving our SAVEE implementation (highly valued)
 *   **Data Packing:** Implementing a way to create packs of a given size from the input data to optimize training.
 *   **Multi-gpu training:** Training on several GPUs
-*   **Multi-image support:** Training with several images
-*   **Image-splitting:** Enabling higher resolutions through image-splitting as done in SmolVLM.
+*   **Multi-audio support:** Training with several audios
+*   **Image-splitting:** Enabling higher resolutions through audio-splitting as done in SmolVLM.
 *   **VLMEvalKit:** Integration into [VLMEvalKit](https://github.com/open-compass/VLMEvalKit) to enable further benchmarks
 
 ## Citation

@@ -5,7 +5,7 @@ class ModalityProjector(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.input_dim = cfg.vit_hidden_dim * (cfg.mp_pixel_shuffle_factor**2)
+        self.input_dim = cfg.audio_hidden_dim * (cfg.mp_pixel_shuffle_factor**2)
         self.output_dim = cfg.lm_hidden_dim
         self.scale_factor = cfg.mp_pixel_shuffle_factor
 
