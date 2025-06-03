@@ -30,6 +30,8 @@ import models.utils as utils
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+from debug_func import debug_training_step, debug_model_dimensions
+
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
     numpy.random.seed(worker_seed)
@@ -293,6 +295,7 @@ def train(train_cfg, alm_cfg):
             with autocast_context:
 
                 with context:
+                    debug_training_step(model, input_ids, audios, attention_mask, labels)  # Debug training step
                     _, loss = model(input_ids, audios, attention_mask=attention_mask, targets=labels)
 
             if train_cfg.gradient_accumulation_steps > 1:
@@ -341,6 +344,7 @@ def train(train_cfg, alm_cfg):
                         attention_mask = batch["attention_mask"].to(device)
 
                         with autocast_context:
+                            debug_training_step(model, input_ids, audios, attention_mask, labels)  # Debug training step
                             _, loss = model(input_ids, audios, attention_mask=attention_mask, targets=labels)
 
                         total_val_loss += loss.item()

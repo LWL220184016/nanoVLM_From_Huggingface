@@ -79,7 +79,8 @@ class AudioPatchEmbeddings(nn.Module):
         x = x[:, :num_patches * self.patch_size, :]
         
         # 重塑为patches: [batch_size, num_patches, patch_size * n_mels]
-        x = x.view(batch_size, num_patches, self.patch_size * n_mels)
+        # Use reshape instead of view to handle non-contiguous tensors
+        x = x.reshape(batch_size, num_patches, self.patch_size * n_mels)
         
         # 投影到隐藏维度
         x = self.projection(x)

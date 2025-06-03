@@ -39,8 +39,14 @@ class ALMConfig:
     lm_tokenizer: str = 'HuggingFaceTB/cosmo2-tokenizer'
     lm_eos_token_id: int = 0
 
-    # 模态投影器配置
-    mp_pixel_shuffle_factor: int = 2
+    # 模态投影器配置（音频专用）
+    mp_projection_type: str = 'adaptive_pool'  # 'linear', 'adaptive_pool', 'attention', 'conv_downsample'
+    mp_target_length: int = 50  # 目标音频token长度
+    mp_use_position_aware: bool = True  # 是否使用位置感知
+    audio_token_target_length: int = 50  # 最终的音频token数量
+    
+    # 更新lm_max_length
+    lm_max_length: int = 128 - 50  # 为音频token预留50个位置
 
     # 音频语言模型配置
     alm_load_backbone_weights: bool = True
