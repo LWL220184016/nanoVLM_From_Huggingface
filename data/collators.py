@@ -6,7 +6,7 @@ class AudioQACollator(object):
         self.max_length = max_length
 
     def __call__(self, batch):
-        audio_data = [item["processed_audio"] for item in batch]
+        audio_data = [item["audio"] for item in batch]
         genders = [item["gender"] for item in batch]
         transcriptions = [item["transcription"] for item in batch]
         major_emotions = [item["major_emotion"] for item in batch]
@@ -59,7 +59,7 @@ class SAVEECollator(object):  # https://huggingface.co/datasets/AbstractTTS/SAVE
         self.max_length = max_length
     
     def __call__(self, batch):
-        audio_data = [item["processed_audio"] for item in batch]
+        audio_data = [item["audio"] for item in batch]
         genders = [item["gender"] for item in batch]
         transcriptions = [item["transcription"] for item in batch]
         major_emotions = [item["major_emotion"] for item in batch]
