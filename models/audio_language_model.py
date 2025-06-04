@@ -81,13 +81,13 @@ class AudioLanguageModel(nn.Module):
             print(f"Debug - shift_labels max: {shift_labels.max().item()}, min: {shift_labels.min().item()}")
             print(f"Debug - vocab_size (logits dim -1): {shift_logits.size(-1)}")
             
-            # 确保shift_labels中没有超出词汇表范围的值
-            vocab_size = shift_logits.size(-1)
-            valid_mask = (shift_labels >= 0) & (shift_labels < vocab_size)
-            invalid_tokens = shift_labels[~valid_mask]
-            if len(invalid_tokens) > 0:
-                print(f"Warning: Found invalid tokens: {invalid_tokens.unique()}")
-                shift_labels = torch.where(valid_mask, shift_labels, -100)
+            # # 确保shift_labels中没有超出词汇表范围的值
+            # vocab_size = shift_logits.size(-1)
+            # valid_mask = (shift_labels >= 0) & (shift_labels < vocab_size)
+            # invalid_tokens = shift_labels[~valid_mask]
+            # if len(invalid_tokens) > 0:
+            #     print(f"Warning: Found invalid tokens: {invalid_tokens.unique()}")
+            #     shift_labels = torch.where(valid_mask, shift_labels, -100)
             
             # 计算交叉熵损失
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
