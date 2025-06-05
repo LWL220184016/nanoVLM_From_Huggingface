@@ -70,8 +70,10 @@ class TrainConfig:
     epochs: int = 5
     compile: bool = False
     resume_from_alm_checkpoint: bool = False
-    train_dataset_path: str = 'AbstractTTS/IEMOCAP'
-    train_dataset_name: tuple[str, ...] = ('default', )
+    # train_dataset_path: str = 'AbstractTTS/IEMOCAP' # for emotion recognition, disabled
+    # train_dataset_name: tuple[str, ...] = ('default', ) # for emotion recognition, disabled
+    train_dataset_path: str = 'speechbrain/LoquaciousSet'
+    train_dataset_name: tuple[str, ...] = ('medium', )
     test_dataset_path: str = "AbstractTTS/SAVEE"
     wandb_entity: str = "HuggingFace"
     log_wandb: bool = True

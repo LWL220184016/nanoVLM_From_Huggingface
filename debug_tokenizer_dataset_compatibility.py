@@ -25,7 +25,10 @@ def debug_tokenizer_dataset_compatibility():
     print(f"Tokenizer model max length: {tokenizer.model_max_length}")
     
     # 載入數據集樣本
-    dataset = load_dataset(train_config.train_dataset_path, train_config.train_dataset_name)
+    dataset = load_dataset(
+        path = train_config.train_dataset_path, 
+        name = train_config.train_dataset_name
+    )
     print("\n--------------------------------------------------------")
     print("Dataset loaded successfully.")
     print(f"Dataset loaded: {train_config.train_dataset_path}/{train_config.train_dataset_name}")

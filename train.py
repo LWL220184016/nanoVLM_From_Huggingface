@@ -82,7 +82,10 @@ def get_dataloaders(train_cfg, alm_cfg):
     # Load and combine all training datasets
     combined_train_data = []
     for dataset_name in train_cfg.train_dataset_name:
-        train_ds = load_dataset(train_cfg.train_dataset_path, dataset_name)
+        train_ds = load_dataset(
+            path = train_cfg.train_dataset_path,
+            name = dataset_name
+        )
         combined_train_data.append(train_ds['train'])
     train_ds = concatenate_datasets(combined_train_data)
     
