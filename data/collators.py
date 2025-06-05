@@ -7,7 +7,7 @@ class AudioQACollator(object):
 
     def __call__(self, batch):
         audio_data = [item["audio"] for item in batch]
-        genders = [item.get("sex", item.get("gender")) for item in batch]
+        genders = [item["gender"] for item in batch]
         transcriptions = [item["transcription"] for item in batch]
         major_emotions = [item["major_emotion"] for item in batch]
 
