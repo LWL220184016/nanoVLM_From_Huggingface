@@ -7,7 +7,7 @@ class AudioQACollator(object):
 
     def __call__(self, batch):
         audio_data = [item["audio"] for item in batch]
-        genders = [item["gender"] for item in batch]
+        genders = [item.get("sex", item.get("gender")) for item in batch]
         transcriptions = [item["transcription"] for item in batch]
         major_emotions = [item["major_emotion"] for item in batch]
 
@@ -17,7 +17,8 @@ class AudioQACollator(object):
         # 创建输入序列
         input_sequences = []
         for i in range(len(transcriptions)):
-            input_sequences.append(f"{transcriptions[i]}{genders[i]}{major_emotions[i]}")
+            # input_sequences.append(f"{transcriptions[i]}{genders[i]}{major_emotions[i]}")
+            input_sequences.append(f"{transcriptions[i]}{genders[i]}")
 
         encoded_full_sequences = self.tokenizer.batch_encode_plus(
             input_sequences,
@@ -73,7 +74,8 @@ class SAVEECollator(object):  # https://huggingface.co/datasets/AbstractTTS/SAVE
         # 您可以根据模型的具体需求调整此格式
         full_target_texts = []
         for i in range(len(batch)):
-            text = f"Transcription: {transcriptions[i]}. Gender: {genders[i]}. Emotion: {major_emotions[i]}."
+            # text = f"Transcription: {transcriptions[i]}. Gender: {genders[i]}. Emotion: {major_emotions[i]}."
+            text = f"Transcription: {transcriptions[i]}. Gender: {genders[i]}."
             full_target_texts.append(text)
         
         padding_strategy = "longest"
