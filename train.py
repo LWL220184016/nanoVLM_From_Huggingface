@@ -81,10 +81,13 @@ def get_dataloaders(train_cfg, alm_cfg):
 
     # Load and combine all training datasets
     combined_train_data = []
+    text = "splitting datasets, disable in get_dataloaders function"
+    print(f"\n\033[38;5;05m{text}05m\033[0m")
     for dataset_name in train_cfg.train_dataset_name:
         train_ds = load_dataset(
             path = train_cfg.train_dataset_path,
-            name = dataset_name
+            name = dataset_name, 
+            split='train[:1000]'
         )
         combined_train_data.append(train_ds['train'])
     train_ds = concatenate_datasets(combined_train_data)
