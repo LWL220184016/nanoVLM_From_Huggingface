@@ -18,9 +18,9 @@ class AudioQADataset(Dataset): # https://huggingface.co/datasets/AbstractTTS/IEM
         item = self.dataset[idx]
         
         # 处理音频
-        if 'wav' in item and isinstance(item['wav'], dict) and 'array' in item['wav'] and 'sampling_rate' in item['wav']:
+        if 'wav' in item and isinstance(item['wav'], dict):
             audio_feature_dict = item['wav']
-        elif 'audio' in item and isinstance(item['audio'], dict) and 'array' in item['audio'] and 'sampling_rate' in item['audio']:
+        elif 'audio' in item and isinstance(item['audio'], dict):
             audio_feature_dict = item['audio'] # Get the dictionary containing audio data
         else:
             raise KeyError("Audio data not found in 'audio' or 'wav' keys, or format is incorrect.")
@@ -63,11 +63,12 @@ class AudioQADataset(Dataset): # https://huggingface.co/datasets/AbstractTTS/IEM
 
         processed_audio = self.audio_processor(raw_audio_array, original_sampling_rate)
         gender = item.get('gender', item.get('sex')) # Try 'gender', then 'sex'
+        transcription = item.get('transcription', item.get('text')) # Try 'gender', then 'sex'
         
         return {
             "audio": processed_audio,
             "gender": gender,
-            "transcription": item['transcription'],
+            "transcription": transcription,
             "major_emotion": item['major_emotion']
         }
     
