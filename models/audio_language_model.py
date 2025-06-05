@@ -62,7 +62,16 @@ class AudioLanguageModel(nn.Module):
             combined_attention_mask = None
         
         # 通过语言模型
-        logits = self.decoder(inputs_embeds, attention_mask=combined_attention_mask)
+        decoder_output = self.decoder(inputs_embeds, attention_mask=combined_attention_mask)
+        
+        # 确保通过分类头得到正确的logits
+        if hasattr(self.decoder, 'head') and decoder_output.shape[-1] != self.cfg.lm_vocab_size:
+            logits = self.decoder.head(decoder_output)
+        else:
+            logits = decoder_output
+        
+        print(f"Final logits shape: {logits.shape}")
+        print(f"Expected vocab_size: {self.cfg.lm_vocab_size}")
         
         # 只对文本部分计算损失
         if targets is not None:
