@@ -70,25 +70,25 @@ class AudioLanguageModel(nn.Module):
         else:
             logits = decoder_output
         
-        print(f"Final logits shape: {logits.shape}")
-        print(f"Expected vocab_size: {self.cfg.lm_vocab_size}")
+        # print(f"Debug - Final logits shape: {logits.shape}")
+        # print(f"Debug - Expected vocab_size: {self.cfg.lm_vocab_size}")
         
         # 只对文本部分计算损失
         if targets is not None:
             # 调试信息
-            print(f"Debug - logits shape: {logits.shape}")
-            print(f"Debug - audio_embeds shape: {audio_embeds.shape}")
-            print(f"Debug - targets shape: {targets.shape}")
-            print(f"Debug - targets max: {targets.max().item()}, min: {targets.min().item()}")
+            # print(f"Debug - logits shape: {logits.shape}")
+            # print(f"Debug - audio_embeds shape: {audio_embeds.shape}")
+            # print(f"Debug - targets shape: {targets.shape}")
+            # print(f"Debug - targets max: {targets.max().item()}, min: {targets.min().item()}")
             
             # 将目标序列向右移动一位用于因果语言模型
             shift_logits = logits[..., audio_embeds.shape[1]:-1, :].contiguous()
             shift_labels = targets[..., 1:].contiguous()
             
-            print(f"Debug - shift_logits shape: {shift_logits.shape}")
-            print(f"Debug - shift_labels shape: {shift_labels.shape}")
-            print(f"Debug - shift_labels max: {shift_labels.max().item()}, min: {shift_labels.min().item()}")
-            print(f"Debug - vocab_size (logits dim -1): {shift_logits.size(-1)}")
+            # print(f"Debug - shift_logits shape: {shift_logits.shape}")
+            # print(f"Debug - shift_labels shape: {shift_labels.shape}")
+            # print(f"Debug - shift_labels max: {shift_labels.max().item()}, min: {shift_labels.min().item()}")
+            # print(f"Debug - vocab_size (logits dim -1): {shift_logits.size(-1)}")
             
             # # 确保shift_labels中没有超出词汇表范围的值
             # vocab_size = shift_logits.size(-1)

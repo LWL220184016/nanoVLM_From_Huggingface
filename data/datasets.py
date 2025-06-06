@@ -69,7 +69,7 @@ class AudioQADataset(Dataset): # https://huggingface.co/datasets/AbstractTTS/IEM
             "audio": processed_audio,
             "gender": gender,
             "transcription": transcription,
-            "major_emotion": item['major_emotion']
+            # "major_emotion": item['major_emotion']
         }
     
 class SAVEEDataset(Dataset):  # https://huggingface.co/datasets/AbstractTTS/SAVEE
