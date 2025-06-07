@@ -166,14 +166,70 @@ class AudioLanguageModel(nn.Module):
         
         return generated_tokens
 
-    # 其他方法（save_pretrained, from_pretrained, push_to_hub）可以参考原来的VisionLanguageModel实现
+    # 其他方法（save_pretrained, from_pretrained, push_to_hub）可以参考原来的AudioLanguageModel实现
     @classmethod
-    def from_pretrained(cls, repo_id_or_path: str, *, revision: Optional[str] = None) -> "AudioLanguageModel":
-        """从预训练模型加载"""
-        # 实现逻辑类似VisionLanguageModel.from_pretrained
-        pass
-    
+    def from_pretrained(
+        cls, repo_id_or_path: str, *, revision: Optional[str] = None
+    ) -> "AudioLanguageModel":
+        """
+        Load a VisionLanguageModel from a local directory or a repo on the Hugging Face Hub.
+
+        Args:
+            repo_id_or_path (str): The path to the local directory or the Hugging Face Hub repo ID.
+
+        Returns:
+            VisionLanguageModel: The loaded model.
+        """
+        # If local folder exists => load from there
+        if os.path.exists(repo_id_or_path):
+            config_path = os.path.join(repo_id_or_path, "config.json")
+            weights_path = os.path.join(repo_id_or_path, "model.safetensors")
+
+            if not os.path.exists(config_path):
+                raise ValueError(
+                    f"Config file not found at {config_path}. Please provide a valid path."
+                )
+            if not os.path.exists(weights_path):
+                raise ValueError(
+                    f"Weights file not found at {weights_path}. Please provide a valid path."
+                )
+        # Otherwise, assume it's a Hugging Face Hub repo
+        else:
+            from huggingface_hub import hf_hub_download
+
+            config_path = hf_hub_download(
+                repo_id=repo_id_or_path, filename="config.json", revision=revision
+            )
+            weights_path = hf_hub_download(
+                repo_id=repo_id_or_path, filename="model.safetensors", revision=revision
+            )
+
+        # Load config
+        with open(config_path, "r") as f:
+            cfg = ALMConfig(**json.load(f))
+
+        # Initialize model without loading the backbone
+        model = cls(cfg, load_backbone=False)
+
+        # Load safetensors weights
+        load_model(model, weights_path)
+
+        # Done!
+        return model
+
     def save_pretrained(self, save_directory: str) -> None:
-        """保存模型"""
-        # 实现逻辑类似VisionLanguageModel.save_pretrained
-        pass
+        """
+        Save the model and configuration to a directory.
+
+        Args:
+            save_directory (str): The directory to save the model and config.
+        """
+        # Create directory if it doesn't exist
+        os.makedirs(save_directory, exist_ok=True)
+
+        # Save config
+        with open(os.path.join(save_directory, "config.json"), "w") as f:
+            f.write(json.dumps(asdict(self.cfg), indent=4))
+
+        # Save weights as safetensors
+        save_model(self, os.path.join(save_directory, "model.safetensors"))

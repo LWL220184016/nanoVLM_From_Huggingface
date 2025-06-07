@@ -13,7 +13,7 @@
 
 ---
 
-nanoVLM is the simplest repository for training/finetuning a small sized Vision-Language Model with a lightweight implementation in pure PyTorch. The code itself is very readable and approachable, the model consists of a Vision Backbone (`models/vision_transformer.py` ~150 lines), Language Decoder (`models/language_model.py` ~250 lines), Modality Projection (`models/modality_projection.py` ~50 lines) and the VLM itself (`models/vision_language_model.py` ~100 lines) and a simple training loop (`train.py` ~200 lines).
+nanoVLM is the simplest repository for training/finetuning a small sized Vision-Language Model with a lightweight implementation in pure PyTorch. The code itself is very readable and approachable, the model consists of a Vision Backbone (`models/vision_transformer.py` ~150 lines), Language Decoder (`models/language_model.py` ~250 lines), Modality Projection (`models/modality_projection.py` ~50 lines) and the VLM itself (`models/audio_language_model.py` ~100 lines) and a simple training loop (`train.py` ~200 lines).
 
 Similar to Andrej Karpathy's nanoGPT, we wanted to equip the community with a very simple implementation and training script for Vision Language Models. We do not claim this to be a new SOTA model, rather an educational effort that packs quite a bit of punch if you have the right hardware! You should be able to tweak and play around with the code in no time.
 
@@ -107,9 +107,9 @@ Here is how to load from a repo on the Hugging Face Hub. This is the recommended
 
 ```python
 # Load pretrained weights from Hub
-from models.vision_language_model import VisionLanguageModel
+from models.audio_language_model import AudioLanguageModel
 
-model = VisionLanguageModel.from_pretrained("lusxvr/nanoVLM-222M")
+model = AudioLanguageModel.from_pretrained("lusxvr/nanoVLM-222M")
 ```
 
 ### Push to hub
@@ -143,9 +143,9 @@ You can then reload it from the local path:
 
 ```python
 # Load pretrained weights from local path
-from models.vision_language_model import VisionLanguageModel
+from models.audio_language_model import AudioLanguageModel
 
-model = VisionLanguageModel.from_pretrained("path/to/local/model")
+model = AudioLanguageModel.from_pretrained("path/to/local/model")
 ```
 
 ## VRAM Usage

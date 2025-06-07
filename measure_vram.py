@@ -11,7 +11,7 @@ if torch.cuda.is_available():
 from data.collators import AudioQACollator
 from data.datasets import AudioQADataset
 from data.processors import get_audio_processor, get_tokenizer
-from models.vision_language_model import VisionLanguageModel
+from models.audio_language_model import AudioLanguageModel
 import models.config as config
 
 import os
@@ -26,7 +26,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
     # --- Model Initialization ---
     torch.cuda.reset_peak_memory_stats(device)
     print(f"Using ALMConfig defaults: load_backbone_weights={alm_cfg.vlm_load_backbone_weights}")
-    model = VisionLanguageModel(alm_cfg, load_backbone=alm_cfg.vlm_load_backbone_weights)
+    model = AudioLanguageModel(alm_cfg, load_backbone=alm_cfg.vlm_load_backbone_weights)
 
     if args.compile:
         print("Compiling the model with torch.compile...")
@@ -174,7 +174,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Measure VRAM usage for a VisionLanguageModel at different batch sizes.")
+    parser = argparse.ArgumentParser(description="Measure VRAM usage for a AudioLanguageModel at different batch sizes.")
     
     # Model and Config args
     parser.add_argument('--compile', action='store_true', help='Compile the model with torch.compile.')

@@ -50,6 +50,7 @@ class ALMConfig:
     lm_max_length: int = TOTAL_SEQUENCE_LENGTH - mp_target_length
 
     # ALM配置
+    alm_name: str = "nanoALM-222M"
     alm_load_backbone_weights: bool = True
     alm_checkpoint_path: str = 'checkpoints/nanoALM-222M'
     hf_repo_name: str = None  # 設置您的 HuggingFace 倉庫名稱

@@ -5,7 +5,7 @@ torch.manual_seed(0)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(0)
 
-from models.vision_language_model import VisionLanguageModel
+from models.audio_language_model import AudioLanguageModel
 from data.processors import get_tokenizer, get_audio_processor
 
 from torch.utils import benchmark
@@ -17,7 +17,7 @@ def generate_tokens(tokens, audio):
     gen = model.generate(tokens, audio, max_new_tokens=100)
 
 if __name__ == "__main__":
-    model = VisionLanguageModel.from_pretrained("lusxvr/nanoVLM-222M").to(device)
+    model = AudioLanguageModel.from_pretrained("lusxvr/nanoVLM-222M").to(device)
     model.eval()
     
     tokenizer = get_tokenizer(model.cfg.lm_tokenizer)

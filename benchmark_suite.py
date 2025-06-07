@@ -7,7 +7,7 @@ import itertools
 from PIL import Image
 import pandas as pd
 
-from models.vision_language_model import VisionLanguageModel
+from models.audio_language_model import AudioLanguageModel
 from models.config import ALMConfig
 from data.processors import get_tokenizer, get_audio_processor
 
@@ -44,7 +44,7 @@ def benchmark_vlm(
         mp_pixel_shuffle_factor=mp_pixel_shuffle_factor,
         vlm_load_backbone_weights=True
     )
-    model = VisionLanguageModel(cfg, load_backbone=True).to(device).eval()
+    model = AudioLanguageModel(cfg, load_backbone=True).to(device).eval()
     tokenizer = get_tokenizer(cfg.lm_tokenizer)
     audio_sample_rate_size = int(cfg.audio_model_type[-3:])  # Kinda hacky, works for siglip models
     audio_processor = get_audio_processor(audio_sample_rate_size)
