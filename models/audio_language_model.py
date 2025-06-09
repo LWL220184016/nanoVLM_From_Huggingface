@@ -59,46 +59,26 @@ class AudioLanguageModel(nn.Module):
             # 拼接音频和文本的注意力掩码
             combined_attention_mask = torch.cat([audio_attention_mask, attention_mask], dim=1)
         else:
-            combined_attention_mask = None
+            # 如果原始 attention_mask 為 None，則為整個序列創建一個全1的掩碼
+            combined_attention_mask = torch.ones(
+                batch_size, inputs_embeds.shape[1],
+                device=inputs_embeds.device, dtype=torch.long
+            )
         
-        # 通过语言模型
-        decoder_output = self.decoder(inputs_embeds, attention_mask=combined_attention_mask)
+        # 通过语言模型 (self.cfg.lm_use_tokens is False, so self.decoder() returns embeddings)
+        decoder_output_embeds = self.decoder(inputs_embeds, attention_mask=combined_attention_mask)
         
-        # 确保通过分类头得到正确的logits
-        if hasattr(self.decoder, 'head') and decoder_output.shape[-1] != self.cfg.lm_vocab_size:
-            logits = self.decoder.head(decoder_output)
-        else:
-            logits = decoder_output
-        
-        # print(f"Debug - Final logits shape: {logits.shape}")
-        # print(f"Debug - Expected vocab_size: {self.cfg.lm_vocab_size}")
+        # 必须通过 head 获取 logits
+        logits = self.decoder.head(decoder_output_embeds)
         
         # 只对文本部分计算损失
         if targets is not None:
-            # 调试信息
-            # print(f"Debug - logits shape: {logits.shape}")
-            # print(f"Debug - audio_embeds shape: {audio_embeds.shape}")
-            # print(f"Debug - targets shape: {targets.shape}")
-            # print(f"Debug - targets max: {targets.max().item()}, min: {targets.min().item()}")
+            # logits 的文本部分从 audio_embeds.shape[1] 开始
+            text_logits = logits[:, audio_embeds.shape[1]:, :] 
+            # Causal LM loss: 预测下一个 token, 所以 logits 和 labels 需要移位
+            shift_logits = text_logits[..., :-1, :].contiguous()
+            shift_labels = targets[..., 1:].contiguous() # targets 对应原始的 input_ids (文本部分)
             
-            # 将目标序列向右移动一位用于因果语言模型
-            shift_logits = logits[..., audio_embeds.shape[1]:-1, :].contiguous()
-            shift_labels = targets[..., 1:].contiguous()
-            
-            # print(f"Debug - shift_logits shape: {shift_logits.shape}")
-            # print(f"Debug - shift_labels shape: {shift_labels.shape}")
-            # print(f"Debug - shift_labels max: {shift_labels.max().item()}, min: {shift_labels.min().item()}")
-            # print(f"Debug - vocab_size (logits dim -1): {shift_logits.size(-1)}")
-            
-            # # 确保shift_labels中没有超出词汇表范围的值
-            # vocab_size = shift_logits.size(-1)
-            # valid_mask = (shift_labels >= 0) & (shift_labels < vocab_size)
-            # invalid_tokens = shift_labels[~valid_mask]
-            # if len(invalid_tokens) > 0:
-            #     print(f"Warning: Found invalid tokens: {invalid_tokens.unique()}")
-            #     shift_labels = torch.where(valid_mask, shift_labels, -100)
-            
-            # 计算交叉熵损失
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             
@@ -114,57 +94,58 @@ class AudioLanguageModel(nn.Module):
         
         # 编码音频
         audio_features = self.audio_encoder(audio)
-        audio_embeds = self.MP(audio_features)
+        audio_embeds = self.MP(audio_features) 
         
         # 获取初始文本嵌入
         text_embeds = self.decoder.token_embedding(input_ids)
         
         # 拼接音频和文本嵌入
-        outputs = torch.cat([audio_embeds, text_embeds], dim=1)
+        current_sequence_embeds = torch.cat([audio_embeds, text_embeds], dim=1)
         
         # 创建注意力掩码
-        if attention_mask is not None:
+        if attention_mask is not None: 
             audio_attention_mask = torch.ones(
                 batch_size, audio_embeds.shape[1], 
                 device=attention_mask.device, dtype=attention_mask.dtype
             )
-            combined_attention_mask = torch.cat([audio_attention_mask, attention_mask], dim=1)
-        else:
-            combined_attention_mask = None
+            current_attention_mask = torch.cat([audio_attention_mask, attention_mask], dim=1)
+        else: 
+            current_attention_mask = torch.ones(
+                batch_size, current_sequence_embeds.shape[1], 
+                device=current_sequence_embeds.device, dtype=torch.long
+            )
         
-        # 生成新token
-        generated_tokens = torch.zeros(batch_size, max_new_tokens, device=input_ids.device, dtype=torch.long)
+        generated_tokens_ids_list = [] 
         
-        for i in range(max_new_tokens):
-            # 通过语言模型
-            logits = self.decoder(outputs, attention_mask=combined_attention_mask)
+        for _ in range(max_new_tokens):
+            # 通过语言模型 (self.decoder.lm_use_tokens is False, so self.decoder() returns embeddings)
+            decoder_output_embeds = self.decoder(current_sequence_embeds, attention_mask=current_attention_mask)
             
-            # 获取最后一个token的logits
-            last_token_logits = logits[:, -1, :]
+            # 获取最后一个token的输出嵌入 (对应下一个token的预测)
+            last_token_embed_from_decoder = decoder_output_embeds[:, -1, :]
             
-            # 如果模型使用embedding模式，需要通过head层
-            if not self.decoder.lm_use_tokens:
-                last_token_logits = self.decoder.head(last_token_logits)
+            # 通过 head 层得到 logits
+            last_token_logits = self.decoder.head(last_token_embed_from_decoder)
                 
             if greedy:
-                next_token = torch.argmax(last_token_logits, dim=-1, keepdim=True)
+                next_token_id = torch.argmax(last_token_logits, dim=-1, keepdim=True)
             else:
                 filtered_logits = top_k_top_p_filtering(last_token_logits, top_k=top_k, top_p=top_p)
-                probs = torch.softmax(filtered_logits/temperature, dim=-1)
-                next_token = torch.multinomial(probs, num_samples=1)
+                probs = torch.softmax(filtered_logits / temperature, dim=-1)
+                next_token_id = torch.multinomial(probs, num_samples=1)
             
-            generated_tokens[:, i] = next_token.squeeze(-1)
+            generated_tokens_ids_list.append(next_token_id)
             
-            # 将新token转换为embedding并添加到序列中
-            next_embd = self.decoder.token_embedding(next_token)
-            outputs = torch.cat((outputs, next_embd), dim=1)
+            # 将新token转换为embedding并添加到序列中，为下一次迭代做准备
+            next_token_embed = self.decoder.token_embedding(next_token_id)
+            current_sequence_embeds = torch.cat((current_sequence_embeds, next_token_embed), dim=1)
             
             # 更新注意力掩码
-            if combined_attention_mask is not None:
-                new_mask = torch.ones(batch_size, 1, device=combined_attention_mask.device, dtype=combined_attention_mask.dtype)
-                combined_attention_mask = torch.cat([combined_attention_mask, new_mask], dim=1)
+            new_mask_segment = torch.ones(batch_size, 1, device=current_attention_mask.device, dtype=current_attention_mask.dtype)
+            current_attention_mask = torch.cat([current_attention_mask, new_mask_segment], dim=1)
         
-        return generated_tokens
+        generated_tokens_tensor = torch.cat(generated_tokens_ids_list, dim=1)
+        return generated_tokens_tensor
 
     # 其他方法（save_pretrained, from_pretrained, push_to_hub）可以参考原来的AudioLanguageModel实现
     @classmethod

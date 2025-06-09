@@ -31,7 +31,7 @@ def parse_args():
                         help="Text prompt to feed the model")
     parser.add_argument("--generations", type=int, default=5,
                         help="Num. of outputs to generate")
-    parser.add_argument("--max_new_tokens", type=int, default=20,
+    parser.add_argument("--max_new_tokens", type=int, default=100,
                         help="Maximum number of tokens per output")
     return parser.parse_args()
 
@@ -76,10 +76,18 @@ def main():
 
     print("\nInput:\n ", args.prompt, "\n\nOutputs:")
     for i in range(args.generations):
-        gen = model.generate(tokens, audio_t, max_new_tokens=args.max_new_tokens)
+        # 可以調整生成參數，例如 temperature, top_k, top_p
+        gen = model.generate(
+            tokens, 
+            audio_t, 
+            max_new_tokens=args.max_new_tokens,
+            greedy=False, # 嘗試使用採樣
+            top_k=50,
+            top_p=0.9,
+            temperature=0.7 
+        )
         out = tokenizer.batch_decode(gen, skip_special_tokens=True)[0]
         print(f"  >> Generation {i+1}: {out}")
-
 
 if __name__ == "__main__":
     main()
