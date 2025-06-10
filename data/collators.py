@@ -68,7 +68,10 @@ class AudioQACollator(object):
 
             
             # 找到 "Answer: " 在 input_ids[i] 中的結束位置
-            answer_marker_tokens = self.tokenizer.encode("Answer:", add_special_tokens=False) # 不包含空格
+            # 參考 https://huggingface.co/HuggingFaceTB/SmolLM2-135M/raw/main/vocab.json 的 "ĠAnswer":19842,
+            # "Ġ" 代表的是一個空格, "Answer" 的 token ID 是 21350, 實際上是根據 " Answer:" 進行分詞, 因此結果是 [19842, 42]
+            # answer_marker_tokens = self.tokenizer.encode("Answer:", add_special_tokens=False) # 不包含空格, 結果是 [21350, 42]
+            answer_marker_tokens = [19842, 42]
             marker_end_idx = -1
             for k in range(actual_content_start_index, input_ids.shape[1] - len(answer_marker_tokens) +1):
                 if torch.equal(input_ids[i, k : k + len(answer_marker_tokens)], torch.tensor(answer_marker_tokens, device=input_ids.device)):
