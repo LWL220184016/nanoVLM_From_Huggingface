@@ -18,7 +18,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Generate text from an audio with nanoVLM")
     parser.add_argument(
-        "--checkpoint", type=str, default="./",
+        "--checkpoint", type=str, default="./2/",
         help="Path to a local checkpoint (directory or safetensors/pth). If omitted, we pull from HF."
     )
     parser.add_argument(

@@ -5,7 +5,7 @@ from dataclasses import asdict
 from typing import Optional
 
 from models.utils import top_k_top_p_filtering
-from models.audio_transformer import AudioTransformer
+from models.audio_transformer import AudioTransformer_from_HF as AudioTransformer
 from models.language_model import LanguageModel
 from models.modality_projector import ModalityProjector
 from models.config import ALMConfig
