@@ -39,9 +39,13 @@ class AudioLanguageModel(nn.Module):
         batch_size = input_ids.shape[0]
         
         # 编码音频
-        audio_features = self.audio_encoder(audio)  # [B, num_patches, audio_hidden_dim]
+        # audio_features = self.audio_encoder(audio)  # [B, num_patches, audio_hidden_dim]
+        # audio_embeds = self.MP(audio_features)  # [B, num_patches, lm_hidden_dim]
+        audio_features = self.audio_encoder.encoder(audio, output_hidden_states=True) # [B, num_patches, audio_hidden_dim]
+        audio_embeddings = audio_features.last_hidden_state
         audio_embeds = self.MP(audio_features)  # [B, num_patches, lm_hidden_dim]
         
+
         # 获取文本嵌入
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, seq_len, lm_hidden_dim]
         

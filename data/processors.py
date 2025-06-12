@@ -71,7 +71,7 @@ class AudioProcessor_from_HF:
         # 这能确保你为特定模型获取正确的预处理器。
         self.processor = AutoProcessor.from_pretrained(cfg.audio_model_type)
         self.audio_max_length = cfg.audio_max_length
-        print(f"AudioProcessor initialized with model: {cfg.audio_model_type}, max_length: {self.audio_max_length}")
+        print(f"AudioProcessor initialized with model: {type(self.processor)}, max_length: {self.audio_max_length}")
         # 大多数现代音频模型（包括Whisper和许多ASR模型）期望16kHz的采样率。
         # AutoProcessor 加载的 feature_extractor 通常会处理到目标采样率的重采样。
 
