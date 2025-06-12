@@ -70,7 +70,8 @@ class AudioProcessor_from_HF:
         # 使用 AutoProcessor 根据 cfg.audio_model_type 自动加载合适的 processor。
         # 这能确保你为特定模型获取正确的预处理器。
         self.processor = AutoProcessor.from_pretrained(cfg.audio_model_type)
-        
+        self.audio_max_length = cfg.audio_max_length
+        print(f"AudioProcessor initialized with model: {cfg.audio_model_type}, max_length: {self.audio_max_length}")
         # 大多数现代音频模型（包括Whisper和许多ASR模型）期望16kHz的采样率。
         # AutoProcessor 加载的 feature_extractor 通常会处理到目标采样率的重采样。
 
@@ -96,8 +97,7 @@ class AudioProcessor_from_HF:
         inputs = self.processor(
             audio_array, 
             sampling_rate=input_sr, 
-            return_tensors="pt",
-            padding=True # 或者 "longest", "max_length" 根据需要
+            return_tensors="pt", 
         )
         
         # Processor 通常返回一个字典，其中包含 'input_features' (对于Whisper等)
@@ -115,7 +115,8 @@ class AudioProcessor_from_HF:
         # 因此，如果确实是单个样本且存在批次维度，则移除它。
         if processed_audio.ndim == 3 and processed_audio.shape[0] == 1:
             processed_audio = processed_audio.squeeze(0)
-            
+        
+        print(f"Processed audio shape: {processed_audio.shape}")  # 调试输出
         return processed_audio
     
     def batch_process(self, audio_paths: List[str]) -> torch.Tensor:

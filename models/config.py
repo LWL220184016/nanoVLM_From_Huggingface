@@ -20,7 +20,7 @@ class ALMConfig:
     audio_n_fft: int = 400  # FFT窗口大小
     audio_hop_length: int = 160  # 跳躍長度
     audio_n_mels: int = 80  # 梅爾濾波器數量
-    audio_max_length: int = 1000  # 最大時間步數
+    audio_max_length: int = 3000  # 最大時間步數
 
     # 語言模型配置
     lm_hidden_dim: int = 576
@@ -41,7 +41,7 @@ class ALMConfig:
     lm_eos_token_id: int = 0
 
     # 音頻token配置
-    AUDIO_TOKEN_LENGTH: int = 62  # audio_max_length // audio_patch_size
+    AUDIO_TOKEN_LENGTH: int = int(audio_max_length / audio_patch_size)
     TOTAL_SEQUENCE_LENGTH: int = 128
     
     # 模態投影器配置
