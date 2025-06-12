@@ -43,7 +43,7 @@ class AudioLanguageModel(nn.Module):
         # audio_embeds = self.MP(audio_features)  # [B, num_patches, lm_hidden_dim]
         audio_features = self.audio_encoder.encoder(audio, output_hidden_states=True) # [B, num_patches, audio_hidden_dim]
         audio_embeddings = audio_features.last_hidden_state
-        audio_embeds = self.MP(audio_features)  # [B, num_patches, lm_hidden_dim]
+        audio_embeds = self.MP(audio_embeddings)  # [B, num_patches, lm_hidden_dim]
         
 
         # 获取文本嵌入
