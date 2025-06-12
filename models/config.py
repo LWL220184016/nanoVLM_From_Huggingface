@@ -11,8 +11,9 @@ class ALMConfig:
     audio_n_blocks: int = 12
     audio_ln_eps: float = 1e-6
     # audio_model_type: str = 'custom_audio_transformer'
-    # 如果使用 nvidia/parakeet-tdt-0.6b-v2, 以上參數將不會發生作用
-    audio_model_type: str = 'nvidia/parakeet-tdt-0.6b-v2' # asr model for encoder from huggingface
+    # 如果使用以下 ASR 模型, 以上參數將不會發生作用
+    # audio_model_type: str = 'nvidia/parakeet-tdt-0.6b-v2' # asr model for encoder from NeMo
+    audio_model_type: str = 'openai/whisper-large-v3' # asr model for encoder from huggingface
 
     # 音頻處理相關參數
     audio_sample_rate: int = 16000  # 採樣率

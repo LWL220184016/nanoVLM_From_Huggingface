@@ -21,7 +21,7 @@ if __name__ == "__main__":
     model.eval()
     
     tokenizer = get_tokenizer(model.cfg.lm_tokenizer)
-    audio_processor = get_audio_processor(model.cfg.audio_sample_rate_size)
+    audio_processor = get_audio_processor(model.cfg)
 
     text = "What is this?"
     template = f"Question: {text} Answer:"

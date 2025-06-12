@@ -76,7 +76,7 @@ def get_run_name(train_cfg):
 
 def get_dataloaders(train_cfg, alm_cfg):
     # Create datasets
-    audio_processor = get_audio_processor(alm_cfg.audio_sample_rate)
+    audio_processor = get_audio_processor(alm_cfg)
     tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
 
     # Load and combine all training datasets

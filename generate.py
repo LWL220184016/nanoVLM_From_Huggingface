@@ -53,7 +53,7 @@ def main():
     model.eval()
 
     tokenizer = get_tokenizer(model.cfg.lm_tokenizer)
-    audio_processor = get_audio_processor()
+    audio_processor = get_audio_processor(model.cfg)
 
     template = f"Question: {args.prompt} Answer:"
     encoded = tokenizer.batch_encode_plus([template], return_tensors="pt")

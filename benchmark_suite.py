@@ -46,8 +46,7 @@ def benchmark_vlm(
     )
     model = AudioLanguageModel(cfg, load_backbone=True).to(device).eval()
     tokenizer = get_tokenizer(cfg.lm_tokenizer)
-    audio_sample_rate_size = int(cfg.audio_model_type[-3:])  # Kinda hacky, works for siglip models
-    audio_processor = get_audio_processor(audio_sample_rate_size)
+    audio_processor = get_audio_processor(cfg)
 
     initial_vram_model_mb = 0
     if device.type == 'cuda':

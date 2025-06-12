@@ -44,7 +44,7 @@ def measure_vram(args, alm_cfg, train_cfg_defaults):
     print(f"Model initialized with {sum(p.numel() for p in model.parameters()):,} parameters")
 
     # --- Dataset Preparation ---
-    audio_processor = get_audio_processor(alm_cfg.audio_sample_rate_size)
+    audio_processor = get_audio_processor(alm_cfg)
     tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
 
     dataset_path = train_cfg_defaults.train_dataset_path
