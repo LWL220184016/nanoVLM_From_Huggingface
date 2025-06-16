@@ -106,28 +106,17 @@ class AudioProcessor_from_HF:
         print(f"  Calculated max raw audio samples for processor: {self.max_raw_audio_samples_for_target_frames}")
 
     def __call__(self, audio_array: np.ndarray, input_sr: int) -> torch.Tensor:
-        """
-        处理单个音频波形数据。
-        Args:
-            audio_array: 原始音频波形 (numpy array)。librosa.load 默认返回 float32 类型。
-                         期望是单声道音频。
-            input_sr: 原始音频的采样率。
-        Returns:
-            torch.Tensor: 模型所需的音频特征张量。
-        """
-        # 将音频数据和原始采样率传递给 Hugging Face processor。
-        # processor 会负责：
-        # 1. 重采样到模型期望的采样率（如果 input_sr 与模型期望不同）。
-        # 2. 转换为模型所需的特征（例如，对数梅尔频谱）。
-        # 3. 进行填充或截断以匹配模型的固定输入大小 or the specified max_length.
+        # 在處理前截斷音頻以減少記憶體使用
+        max_samples = 30 * input_sr  # 限制為 30 秒
+        if len(audio_array) > max_samples:
+            audio_array = audio_array[:max_samples]
         
         inputs = self.processor(
             audio_array, 
-            sampling_rate=input_sr, # Original sampling rate
+            sampling_rate=input_sr, 
             return_tensors="pt",
-            padding="max_length",   # Pad to max_length if shorter than max_length
-            truncation=True,        # Truncate if longer than max_length
-            max_length=self.max_raw_audio_samples_for_target_frames # Max length for the raw audio samples
+            max_length=self.target_feature_frames,  # 限制最大長度
+            truncation=True,  # 啟用截斷
         )
         
         # Processor 通常返回一个字典，其中包含 'input_features' (对于Whisper等)
@@ -146,19 +135,8 @@ class AudioProcessor_from_HF:
         if processed_audio.ndim == 3 and processed_audio.shape[0] == 1:
             processed_audio = processed_audio.squeeze(0)
         
-        # Explicitly truncate or pad the feature frames dimension if necessary,
-        # although padding="max_length" and truncation=True to the processor should handle this.
-        # This is a safeguard or fine-tuning step.
-        # Assuming the last dimension is the time/frame dimension for features.
-        current_frames = processed_audio.shape[-1]
-        if current_frames > self.target_feature_frames:
-            if processed_audio.ndim == 2: # [num_features, num_frames]
-                processed_audio = processed_audio[..., :self.target_feature_frames]
-            elif processed_audio.ndim == 3: # [batch, num_features, num_frames]
-                processed_audio = processed_audio[..., :self.target_feature_frames]
-
-
         print(f"Processed audio shape: {processed_audio.shape}")  # 调试输出
+        del inputs
         return processed_audio
     
     def batch_process(self, audio_paths: List[str]) -> torch.Tensor:

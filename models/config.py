@@ -13,14 +13,15 @@ class ALMConfig:
     # audio_model_type: str = 'custom_audio_transformer'
     # 如果使用以下 ASR 模型, 以上參數將不會發生作用
     # audio_model_type: str = 'nvidia/parakeet-tdt-0.6b-v2' # asr model for encoder from NeMo
-    audio_model_type: str = 'openai/whisper-large-v3' # asr model for encoder from huggingface
+    # audio_model_type: str = 'openai/whisper-large-v3' # asr model for encoder from huggingface
+    audio_model_type: str = 'openai/whisper-small.en' # asr model for encoder from huggingface
 
     # 音頻處理相關參數
     audio_sample_rate: int = 16000  # 採樣率
     audio_n_fft: int = 400  # FFT窗口大小
     audio_hop_length: int = 160  # 跳躍長度
     audio_n_mels: int = 80  # 梅爾濾波器數量
-    audio_max_length: int = 3000  # 最大時間步數
+    audio_max_length: int = 1500  # 最大時間步數
 
     # 語言模型配置
     lm_hidden_dim: int = 576
@@ -46,7 +47,7 @@ class ALMConfig:
     
     # 模態投影器配置
     mp_projection_type: str = 'adaptive_pool'
-    mp_target_length: int = 50
+    mp_target_length: int = 25
     mp_use_position_aware: bool = True
     
     # 計算最大語言模型長度

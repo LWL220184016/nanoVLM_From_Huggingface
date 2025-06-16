@@ -37,21 +37,21 @@ class AudioLanguageModel(nn.Module):
         targets: [batch_size, seq_length] 目标token（用于训练）
         """
         batch_size = input_ids.shape[0]
+    
+        # 编码音频 - 添加記憶體優化
+        with torch.no_grad():  # 在音頻編碼時關閉梯度計算
+            audio_features = self.audio_encoder.encoder(audio, output_hidden_states=True)
+            audio_embeddings = audio_features.last_hidden_state.detach()  # 分離梯度
         
-        # 编码音频
-        # audio_features = self.audio_encoder(audio)  # [B, num_patches, audio_hidden_dim]
-        # audio_embeds = self.MP(audio_features)  # [B, num_patches, lm_hidden_dim]
-        audio_features = self.audio_encoder.encoder(audio, output_hidden_states=True) # [B, num_patches, audio_hidden_dim]
-        audio_embeddings = audio_features.last_hidden_state
+        # 重新啟用梯度用於模態投影器
+        audio_embeddings.requires_grad_(True)
         audio_embeds = self.MP(audio_embeddings)  # [B, num_patches, lm_hidden_dim]
         
-
         # 获取文本嵌入
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, seq_len, lm_hidden_dim]
         
         # 拼接音频和文本嵌入
-        # 音频特征在前，文本在后
-        inputs_embeds = torch.cat([audio_embeds, text_embeds], dim=1)  # [B, audio_len + seq_len, lm_hidden_dim]
+        inputs_embeds = torch.cat([audio_embeds, text_embeds], dim=1)
         
         # 创建组合的注意力掩码
         if attention_mask is not None:
