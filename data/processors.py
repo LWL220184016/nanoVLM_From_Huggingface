@@ -63,17 +63,47 @@ class AudioProcessor_from_HF:
         Args:
             cfg: 配置对象，应包含 audio_model_type 字符串，
                  例如 "openai/whisper-base" 或 "nvidia/parakeet-tdt-0.6b-v2"。
+                 Also, audio_max_length (for feature frames).
         """
         from transformers import AutoProcessor # 导入 AutoProcessor
         import numpy as np # 确保导入 numpy
 
-        # 使用 AutoProcessor 根据 cfg.audio_model_type 自动加载合适的 processor。
-        # 这能确保你为特定模型获取正确的预处理器。
         self.processor = AutoProcessor.from_pretrained(cfg.audio_model_type)
-        self.audio_max_length = cfg.audio_max_length
-        print(f"AudioProcessor initialized with model: {type(self.processor)}, max_length: {self.audio_max_length}")
-        # 大多数现代音频模型（包括Whisper和许多ASR模型）期望16kHz的采样率。
-        # AutoProcessor 加载的 feature_extractor 通常会处理到目标采样率的重采样。
+        self.target_feature_frames = cfg.audio_max_length  # Desired number of feature frames
+
+        # Get parameters from the loaded feature extractor to ensure consistency
+        if hasattr(self.processor, 'feature_extractor') and \
+           hasattr(self.processor.feature_extractor, 'hop_length') and \
+           hasattr(self.processor.feature_extractor, 'n_fft') and \
+           hasattr(self.processor.feature_extractor, 'sampling_rate'):
+            
+            self.hop_length = self.processor.feature_extractor.hop_length
+            self.n_fft = self.processor.feature_extractor.n_fft
+            # The processor will resample to this sampling_rate
+            self.model_sampling_rate = self.processor.feature_extractor.sampling_rate
+        else:
+            # Fallback to cfg if attributes are not found, though less ideal
+            # This might happen if the processor doesn't expose feature_extractor directly
+            # or if it's a different type of processor.
+            # For Whisper, the attributes should be available.
+            print("Warning: Could not get hop_length, n_fft, sampling_rate from processor.feature_extractor. Using values from cfg.")
+            self.hop_length = cfg.audio_hop_length
+            self.n_fft = cfg.audio_n_fft
+            self.model_sampling_rate = cfg.audio_sample_rate
+
+
+        # Calculate the maximum number of raw audio samples required to produce target_feature_frames.
+        # Formula for number of frames: n_frames = floor((n_samples - n_fft) / hop_length) + 1
+        # So, to get n_frames, n_samples should be approximately (n_frames - 1) * hop_length + n_fft
+        self.max_raw_audio_samples_for_target_frames = (self.target_feature_frames - 1) * self.hop_length + self.n_fft
+        
+        # Ensure audio_max_length from cfg is not misinterpreted as seconds here.
+        # self.audio_max_length = cfg.audio_max_length # This was ambiguous, replaced by target_feature_frames
+
+        print(f"AudioProcessor_from_HF initialized with model: {type(self.processor)}")
+        print(f"  Target feature frames from cfg: {self.target_feature_frames}")
+        print(f"  Using model sampling rate: {self.model_sampling_rate}, hop_length: {self.hop_length}, n_fft: {self.n_fft}")
+        print(f"  Calculated max raw audio samples for processor: {self.max_raw_audio_samples_for_target_frames}")
 
     def __call__(self, audio_array: np.ndarray, input_sr: int) -> torch.Tensor:
         """
@@ -89,15 +119,15 @@ class AudioProcessor_from_HF:
         # processor 会负责：
         # 1. 重采样到模型期望的采样率（如果 input_sr 与模型期望不同）。
         # 2. 转换为模型所需的特征（例如，对数梅尔频谱）。
-        # 3. 进行填充或截断以匹配模型的固定输入大小。
-        # `padding="longest"` (或 `padding=True`) 会将音频（在批处理时）填充到批中最长序列的长度，
-        # 或（对于单个项目，如Whisper）填充到模型的固定窗口大小。
-        # `return_tensors="pt"` 会返回 PyTorch 张量。
+        # 3. 进行填充或截断以匹配模型的固定输入大小 or the specified max_length.
         
         inputs = self.processor(
             audio_array, 
-            sampling_rate=input_sr, 
-            return_tensors="pt", 
+            sampling_rate=input_sr, # Original sampling rate
+            return_tensors="pt",
+            padding="max_length",   # Pad to max_length if shorter than max_length
+            truncation=True,        # Truncate if longer than max_length
+            max_length=self.max_raw_audio_samples_for_target_frames # Max length for the raw audio samples
         )
         
         # Processor 通常返回一个字典，其中包含 'input_features' (对于Whisper等)
@@ -116,6 +146,18 @@ class AudioProcessor_from_HF:
         if processed_audio.ndim == 3 and processed_audio.shape[0] == 1:
             processed_audio = processed_audio.squeeze(0)
         
+        # Explicitly truncate or pad the feature frames dimension if necessary,
+        # although padding="max_length" and truncation=True to the processor should handle this.
+        # This is a safeguard or fine-tuning step.
+        # Assuming the last dimension is the time/frame dimension for features.
+        current_frames = processed_audio.shape[-1]
+        if current_frames > self.target_feature_frames:
+            if processed_audio.ndim == 2: # [num_features, num_frames]
+                processed_audio = processed_audio[..., :self.target_feature_frames]
+            elif processed_audio.ndim == 3: # [batch, num_features, num_frames]
+                processed_audio = processed_audio[..., :self.target_feature_frames]
+
+
         print(f"Processed audio shape: {processed_audio.shape}")  # 调试输出
         return processed_audio
     
