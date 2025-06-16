@@ -3,7 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class ALMConfig:
     # 音頻編碼器配置
-    audio_hidden_dim: int = 768
+    audio_hidden_dim: int = 1280
     audio_inter_dim: int = 4 * audio_hidden_dim
     audio_patch_size: int = 16  # 音頻patch大小（時間步數）
     audio_n_heads: int = 12

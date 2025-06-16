@@ -334,6 +334,6 @@ class AudioTransformer_from_HF():
         from transformers import WhisperModel
 
         # processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3") # moved to AudioProcessor in porcessors.py
-        model = WhisperModel.from_pretrained("openai/whisper-large-v3")
+        model = WhisperModel.from_pretrained(cfg.audio_model_type)
 
         return model
