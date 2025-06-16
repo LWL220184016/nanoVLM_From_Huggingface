@@ -115,8 +115,6 @@ class AudioProcessor_from_HF:
             audio_array, 
             sampling_rate=input_sr, 
             return_tensors="pt",
-            max_length=self.target_feature_frames,  # 限制最大長度
-            truncation=True,  # 啟用截斷
         )
         
         # Processor 通常返回一个字典，其中包含 'input_features' (对于Whisper等)
@@ -135,7 +133,7 @@ class AudioProcessor_from_HF:
         if processed_audio.ndim == 3 and processed_audio.shape[0] == 1:
             processed_audio = processed_audio.squeeze(0)
         
-        print(f"Processed audio shape: {processed_audio.shape}")  # 调试输出
+        # print(f"Debug: Processed audio shape: {processed_audio.shape}")  # 调试输出
         del inputs
         return processed_audio
     
