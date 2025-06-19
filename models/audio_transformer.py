@@ -291,9 +291,11 @@ class AudioTransformer_from_HF():
         super().__init__()
         self.cfg = cfg
         
-        self.model = self.from_pretrained(cfg)
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.model.to(device)
+        self.asr_model = self.from_pretrained(cfg)
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.asr_model.to(self.device)
+        self.asr_model.eval()
+        self.datatype = torch.float32
         
 
     def forward(self, audio):
@@ -301,29 +303,19 @@ class AudioTransformer_from_HF():
         audio: [batch_size, audio_length] 原始音频波形
         返回: [batch_size, num_patches, hidden_dim] 音频特征
         """
+
+        # processer 和 ASR 模型的 processor 一樣, 這裡被註解是因為是先前已經經過 processor處理了
+        # audio = processor(audio, sampling_rate=16000, return_tensors="pt")
+        input_features = audio.input_features.to(self.device, dtype=self.datatype)
+
+        # 產生音訊編碼 (encoder embeddings)
         with torch.no_grad():
+            # 直接呼叫模型的 encoder
+            encoder_outputs = self.asr_model.model.encoder(input_features, output_hidden_states=True)
 
-            # NeMo preprocessors typically expect mono audio. If stereo, convert to mono.
-            if audio.shape[0] > 1:
-                audio = torch.mean(audio, dim=0, keepdim=True)
-            
-            # NeMo expects a batch of audio, so add a batch dimension (batch_size, num_samples)
-            input_signal = audio.squeeze(0).unsqueeze(0) # Shape: (1, num_samples)
-            
-            # Get the length of the audio in samples for the batch
-            length = torch.tensor([input_signal.shape[1]], dtype=torch.long) # Shape: (1,)
-
-            # Step 2: Call the preprocessor with the correctly formatted input_signal and length
-            processed_signal, processed_signal_len = self.asr_model.preprocessor(
-                input_signal=input_signal,  # This is the audio tensor
-                length=length              # This is the length tensor
-            )
-            
-            # Step 3: Call the encoder
-            encoded, encoded_len = self.asr_model.encoder(
-                audio_signal=processed_signal,
-                length=processed_signal_len
-            )
+        # 提取最後一層的隱藏狀態
+        # 這就是音訊的編碼/嵌入
+        encoded = encoder_outputs.last_hidden_state
         return encoded
 
     @classmethod
@@ -334,6 +326,6 @@ class AudioTransformer_from_HF():
         from transformers import WhisperModel
 
         # processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3") # moved to AudioProcessor in porcessors.py
-        model = WhisperModel.from_pretrained(cfg.audio_model_type)
+        asr_model = WhisperModel.from_pretrained(cfg.audio_model_type)
 
-        return model
+        return asr_model

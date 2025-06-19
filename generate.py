@@ -18,7 +18,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Generate text from an audio with nanoVLM")
     parser.add_argument(
-        "--checkpoint", type=str, default="./2/",
+        "--checkpoint", type=str, default="./3/",
         help="Path to a local checkpoint (directory or safetensors/pth). If omitted, we pull from HF."
     )
     parser.add_argument(
@@ -61,7 +61,7 @@ def main():
 
     # 使用 librosa 加載音頻文件來避免 torchaudio 兼容性問題
     try:
-        audio_array, sr = librosa.load(args.audio, sr=None)
+        audio_array, sr = librosa.load(args.audio, sr=16000)
         # 轉換為 torch tensor 並添加 batch 維度
         audio_tensor = torch.tensor(audio_array, dtype=torch.float32)
         if audio_tensor.dim() == 1:

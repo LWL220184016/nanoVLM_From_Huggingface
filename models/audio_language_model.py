@@ -40,7 +40,7 @@ class AudioLanguageModel(nn.Module):
     
         # 编码音频 - 添加記憶體優化
         with torch.no_grad():  # 在音頻編碼時關閉梯度計算
-            audio_features = self.audio_encoder.encoder(audio, output_hidden_states=True)
+            audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
             audio_embeddings = audio_features.last_hidden_state.detach()  # 分離梯度
         
         # 重新啟用梯度用於模態投影器
@@ -97,7 +97,7 @@ class AudioLanguageModel(nn.Module):
         batch_size = input_ids.shape[0]
         
         # 编码音频
-        audio_features = self.audio_encoder.encoder(audio, output_hidden_states=True) # [B, num_patches, audio_hidden_dim]
+        audio_features = self.audio_encoder.forward(audio, output_hidden_states=True) # [B, num_patches, audio_hidden_dim]
         audio_embeddings = audio_features.last_hidden_state
         audio_embeds = self.MP(audio_embeddings)  # [B, num_patches, lm_hidden_dim]
         
@@ -195,7 +195,7 @@ class AudioLanguageModel(nn.Module):
             cfg = ALMConfig(**json.load(f))
 
         # Initialize model without loading the backbone
-        model = cls(cfg, load_backbone=False)
+        model = cls(cfg, load_backbone=False, strict=False)
 
         # Load safetensors weights
         load_model(model, weights_path)
