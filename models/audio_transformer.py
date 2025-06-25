@@ -298,7 +298,7 @@ class AudioTransformer_from_HF():
         self.datatype = torch.float32
         
 
-    def forward(self, audio):
+    def forward(self, audio, output_hidden_states=True):
         """
         audio: [batch_size, audio_length] 原始音频波形
         返回: [batch_size, num_patches, hidden_dim] 音频特征
