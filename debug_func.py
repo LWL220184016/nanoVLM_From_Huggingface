@@ -6,7 +6,7 @@ def debug_model_dimensions(model, input_ids, audio):
     print("=== Model Dimension Debug ===")
     
     # 检查音频编码器
-    audio_features = model.audio_encoder(audio)
+    audio_features = model.audio_encoder.encoder(audio, output_hidden_states=True)
     print(f"Audio features shape: {audio_features.shape}")
     
     # 检查模态投影器

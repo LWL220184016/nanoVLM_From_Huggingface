@@ -311,7 +311,7 @@ class AudioTransformer_from_HF():
         # 產生音訊編碼 (encoder embeddings)
         with torch.no_grad():
             # 直接呼叫模型的 encoder
-            encoder_outputs = self.asr_model.model.encoder(input_features, output_hidden_states=True)
+            encoder_outputs = self.asr_model.model.encoder(input_features, output_hidden_states=output_hidden_states)
 
         # 提取最後一層的隱藏狀態
         # 這就是音訊的編碼/嵌入
