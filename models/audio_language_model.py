@@ -39,7 +39,11 @@ class AudioLanguageModel(nn.Module):
         batch_size = input_ids.shape[0]
     
         with torch.no_grad():  # 在音頻編碼時關閉梯度計算
-            audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
+            # 因為首次訓練要載入的是 OpenAI Whisper 的官方模型, 使用的函數 forward 不是 AudioTransformer_from_HF 的而是 
+            # transformers 庫, 因此會呼叫解碼器然後報錯, 需要直接呼叫模型的編碼器才行
+            # audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
+            input_features = audio.to(self.device, dtype=self.datatype)
+            audio_features = self.audio_encoder.encoder(input_features, output_hidden_states=True)
             audio_embeddings = audio_features.last_hidden_state.detach()  # 分離梯度
         
         # 重新啟用梯度用於模態投影器

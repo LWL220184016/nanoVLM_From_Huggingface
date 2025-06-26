@@ -306,12 +306,11 @@ class AudioTransformer_from_HF():
 
         # processer 和 ASR 模型的 processor 一樣, 這裡被註解是因為是先前已經經過 processor處理了
         # audio = processor(audio, sampling_rate=16000, return_tensors="pt")
-        input_features = audio.input_features.to(self.device, dtype=self.datatype)
 
         # 產生音訊編碼 (encoder embeddings)
         with torch.no_grad():
             # 直接呼叫模型的 encoder
-            encoder_outputs = self.asr_model.model.encoder(input_features, output_hidden_states=output_hidden_states)
+            encoder_outputs = self.asr_model.encoder(audio, output_hidden_states=output_hidden_states)
 
         # 提取最後一層的隱藏狀態
         # 這就是音訊的編碼/嵌入

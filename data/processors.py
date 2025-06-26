@@ -135,6 +135,7 @@ class AudioProcessor_from_HF:
         
         # print(f"Debug: Processed audio shape: {processed_audio.shape}")  # 调试输出
         del inputs
+        print(f"Processed audio shape: {processed_audio.shape}")
         return processed_audio
     
     def batch_process(self, audio_paths: List[str]) -> torch.Tensor:
