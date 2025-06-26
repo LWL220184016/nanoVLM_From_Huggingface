@@ -28,6 +28,7 @@ class AudioLanguageModel(nn.Module):
             self.decoder = LanguageModel(cfg)
         self.MP = ModalityProjector(cfg)
         self.load_backbone = load_backbone
+        self.device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
 
     def forward(self, input_ids, audio, attention_mask=None, targets=None):
         """
@@ -42,7 +43,7 @@ class AudioLanguageModel(nn.Module):
             # 因為首次訓練要載入的是 OpenAI Whisper 的官方模型, 使用的函數 forward 不是 AudioTransformer_from_HF 的而是 
             # transformers 庫, 因此會呼叫解碼器然後報錯, 需要直接呼叫模型的編碼器才行
             # audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
-            input_features = audio.to(self.device, dtype=self.datatype)
+            input_features = audio.to(self.device)
             audio_features = self.audio_encoder.encoder(input_features, output_hidden_states=True)
             audio_embeddings = audio_features.last_hidden_state.detach()  # 分離梯度
         
