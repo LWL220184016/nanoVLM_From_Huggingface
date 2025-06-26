@@ -7,7 +7,7 @@ from typing import Optional
 from models.utils import top_k_top_p_filtering
 from models.audio_transformer import AudioTransformer_from_HF as AudioTransformer
 from models.language_model import LanguageModel
-from models.modality_projector import ModalityProjector
+from models.modality_projector import create_modality_projector
 from models.config import ALMConfig
 
 import torch
@@ -26,9 +26,9 @@ class AudioLanguageModel(nn.Module):
         else:
             self.audio_encoder = AudioTransformer(cfg)
             self.decoder = LanguageModel(cfg)
-        self.MP = ModalityProjector(cfg)
+        self.MP = create_modality_projector(cfg)
         self.load_backbone = load_backbone
-        self.device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def forward(self, input_ids, audio, attention_mask=None, targets=None):
         """
