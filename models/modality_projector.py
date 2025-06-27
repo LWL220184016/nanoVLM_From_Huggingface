@@ -186,6 +186,12 @@ class HybridModalityProjector(nn.Module):
         )
         
         self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.xavier_uniform_(module.weight)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
     
     def forward(self, x):
         # x: [B, T, input_dim]
@@ -205,34 +211,6 @@ class HybridModalityProjector(nn.Module):
         x = self.output_projection(x)
         
         return x
-
-class AttentionPooling(nn.Module):
-    def __init__(self, hidden_dim, target_length):
-        super().__init__()
-        self.target_length = target_length
-        self.hidden_dim = hidden_dim
-        
-        # 可学习的查询向量
-        self.queries = nn.Parameter(torch.randn(target_length, hidden_dim))
-        
-        # 多头注意力
-        self.attention = nn.MultiheadAttention(
-            embed_dim=hidden_dim,
-            num_heads=8,
-            dropout=0.1,
-            batch_first=True
-        )
-        
-    def forward(self, x):
-        batch_size = x.shape[0]
-        
-        # 准备查询
-        queries = self.queries.unsqueeze(0).expand(batch_size, -1, -1)
-        
-        # 注意力池化
-        output, _ = self.attention(queries, x, x)
-        
-        return output
 
 class AttentionPooling(nn.Module):
     """基于注意力的池化层，将变长序列池化到固定长度"""
