@@ -81,10 +81,10 @@ def main():
             tokens, 
             audio_t, 
             max_new_tokens=args.max_new_tokens,
-            greedy=False, # 嘗試使用採樣
-            top_k=50,
-            top_p=0.9,
-            temperature=0.7 
+            greedy=True,  # 先使用greedy解碼測試
+            top_k=10,     # 減小top_k
+            top_p=0.8,    # 減小top_p
+            temperature=0.3  # 降低temperature
         )
         out = tokenizer.batch_decode(gen, skip_special_tokens=True)[0]
         print(f"  >> Generation {i+1}: {out}")

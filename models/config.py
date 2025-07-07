@@ -112,7 +112,7 @@ class TrainConfig:
     savee_batch_size: int = 8
 
     # epochs: int = 20
-    stage1_epochs: int = 15  
+    stage1_epochs: int = 30  
     stage2_epochs: int = 12  
     stage3_epochs: int = 8  
 
