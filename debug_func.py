@@ -85,3 +85,46 @@ def debug_labels_masking(self, batch):
             print(f"Text for loss calculation: {valid_text}")
         print("-" * 50)
 
+# 當前的對比學習可能有問題，讓我們診斷一下
+def debug_contrastive_learning(model, batch, device):
+    """診斷對比學習過程"""
+    audios = batch["audio"].to(device)
+    input_ids = batch["input_ids"].to(device)
+    
+    with torch.no_grad():
+        # 獲取音頻特徵
+        input_features = audios.to(device)
+        encoder_outputs = model.audio_encoder.encoder(input_features, output_hidden_states=True)
+        audio_features = encoder_outputs.last_hidden_state
+        audio_embeds = model.MP(audio_features)
+        
+        # 獲取文本嵌入
+        text_embeds = model.decoder.token_embedding(input_ids[:, :-1])
+        
+        print(f"Audio embeds shape: {audio_embeds.shape}")
+        print(f"Text embeds shape: {text_embeds.shape}")
+        print(f"Audio embeds range: [{audio_embeds.min():.4f}, {audio_embeds.max():.4f}]")
+        print(f"Text embeds range: [{text_embeds.min():.4f}, {text_embeds.max():.4f}]")
+        
+        # 檢查池化後的特徵
+        audio_pooled = F.adaptive_avg_pool1d(audio_embeds.transpose(1, 2), 1).squeeze(-1)
+        text_pooled = F.adaptive_avg_pool1d(text_embeds.transpose(1, 2), 1).squeeze(-1)
+        
+        print(f"Audio pooled shape: {audio_pooled.shape}")
+        print(f"Text pooled shape: {text_pooled.shape}")
+        
+        # 檢查歸一化前後的分佈
+        print(f"Audio pooled norm before: {torch.norm(audio_pooled, dim=-1).mean():.4f}")
+        print(f"Text pooled norm before: {torch.norm(text_pooled, dim=-1).mean():.4f}")
+        
+        audio_pooled_norm = F.normalize(audio_pooled, p=2, dim=-1)
+        text_pooled_norm = F.normalize(text_pooled, p=2, dim=-1)
+        
+        print(f"Audio pooled norm after: {torch.norm(audio_pooled_norm, dim=-1).mean():.4f}")
+        print(f"Text pooled norm after: {torch.norm(text_pooled_norm, dim=-1).mean():.4f}")
+        
+        # 計算相似度分佈
+        similarity_matrix = torch.matmul(audio_pooled_norm, text_pooled_norm.T)
+        print(f"Similarity matrix diagonal mean: {torch.diag(similarity_matrix).mean():.4f}")
+        print(f"Similarity matrix off-diagonal mean: {similarity_matrix.fill_diagonal_(0).mean():.4f}")
+

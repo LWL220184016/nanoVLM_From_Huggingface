@@ -94,6 +94,50 @@ class AudioLanguageModel(nn.Module):
         
         return logits
 
+    # 在訓練過程中添加音頻-文本對齊驗證
+    def validate_audio_text_alignment(model, input_ids, audio, attention_mask=None):
+        """詳細的對齊驗證"""
+        model.eval()
+        with torch.no_grad():
+            # 獲取音頻和文本嵌入
+            input_features = audio.to(model.device if hasattr(model, 'device') else 'cuda')
+            encoder_outputs = model.audio_encoder.encoder(input_features, output_hidden_states=True)
+            audio_features = encoder_outputs.last_hidden_state
+            audio_embeds = model.MP(audio_features)
+            
+            text_embeds = model.decoder.token_embedding(input_ids)
+            
+            # 多種相似度計算方式
+            # 1. 餘弦相似度
+            audio_pooled = audio_embeds.mean(dim=1)
+            text_pooled = text_embeds.mean(dim=1)
+            cos_sim = torch.cosine_similarity(audio_pooled, text_pooled, dim=-1).mean()
+            
+            # 2. 歐氏距離
+            euclidean_dist = torch.norm(audio_pooled - text_pooled, dim=-1).mean()
+            
+            # 3. 點積相似度
+            dot_sim = torch.sum(audio_pooled * text_pooled, dim=-1).mean()
+            
+            return {
+                'cosine_similarity': cos_sim.item(),
+                'euclidean_distance': euclidean_dist.item(), 
+                'dot_product': dot_sim.item(),
+                'audio_norm': torch.norm(audio_pooled, dim=-1).mean().item(),
+                'text_norm': torch.norm(text_pooled, dim=-1).mean().item()
+            }
+
+    # 在生成時添加調試信息
+    @torch.no_grad()
+    def generate_with_debug(self, input_ids, audio, attention_mask=None, max_new_tokens=5, **kwargs):
+        """帶調試信息的生成方法"""
+        # 檢查音頻-文本對齊
+        alignment_score = self.validate_audio_text_alignment(input_ids, audio, attention_mask)
+        print(f"Audio-Text alignment score: {alignment_score:.4f}")
+        
+        # 原始生成邏輯
+        return self.generate(input_ids, audio, attention_mask, max_new_tokens, **kwargs)
+
     @torch.no_grad()
     def generate(self, input_ids, audio, attention_mask=None, max_new_tokens=5, top_k=50, top_p=0.9, temperature=0.5, greedy=False):
         """音频问答生成"""
