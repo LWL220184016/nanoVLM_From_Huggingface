@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 # 在训练开始前添加这个检查函数
 def debug_model_dimensions(model, input_ids, audio):

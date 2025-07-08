@@ -95,37 +95,25 @@ class AudioLanguageModel(nn.Module):
         return logits
 
     # 在訓練過程中添加音頻-文本對齊驗證
-    def validate_audio_text_alignment(model, input_ids, audio, attention_mask=None):
-        """詳細的對齊驗證"""
-        model.eval()
+    # 在訓練過程中添加音頻-文本對齊驗證
+    def validate_audio_text_alignment(self, input_ids, audio, attention_mask=None):
+        """驗證音頻和文本的對齊效果"""
+        self.eval()
         with torch.no_grad():
             # 獲取音頻和文本嵌入
-            input_features = audio.to(model.device if hasattr(model, 'device') else 'cuda')
-            encoder_outputs = model.audio_encoder.encoder(input_features, output_hidden_states=True)
+            input_features = audio.to(self.device)
+            encoder_outputs = self.audio_encoder.encoder(input_features, output_hidden_states=True)
             audio_features = encoder_outputs.last_hidden_state
-            audio_embeds = model.MP(audio_features)
+            audio_embeds = self.MP(audio_features)
             
-            text_embeds = model.decoder.token_embedding(input_ids)
+            text_embeds = self.decoder.token_embedding(input_ids)
             
-            # 多種相似度計算方式
-            # 1. 餘弦相似度
+            # 計算相似度
             audio_pooled = audio_embeds.mean(dim=1)
             text_pooled = text_embeds.mean(dim=1)
-            cos_sim = torch.cosine_similarity(audio_pooled, text_pooled, dim=-1).mean()
+            similarity = torch.cosine_similarity(audio_pooled, text_pooled, dim=-1)
             
-            # 2. 歐氏距離
-            euclidean_dist = torch.norm(audio_pooled - text_pooled, dim=-1).mean()
-            
-            # 3. 點積相似度
-            dot_sim = torch.sum(audio_pooled * text_pooled, dim=-1).mean()
-            
-            return {
-                'cosine_similarity': cos_sim.item(),
-                'euclidean_distance': euclidean_dist.item(), 
-                'dot_product': dot_sim.item(),
-                'audio_norm': torch.norm(audio_pooled, dim=-1).mean().item(),
-                'text_norm': torch.norm(text_pooled, dim=-1).mean().item()
-            }
+            return similarity.mean().item()
 
     # 在生成時添加調試信息
     @torch.no_grad()
