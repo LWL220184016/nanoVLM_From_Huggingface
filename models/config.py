@@ -83,7 +83,7 @@ class ALMConfig:
     lm_tie_weights: bool = True
 
     # 模態投影器配置
-    mp_projection_type: str = 'hybrid' # adaptive, transformer, hybrid
+    mp_projection_type: str = 'default' # adaptive, transformer, hybrid, default
     mp_target_length: int = 25
     mp_use_position_aware: bool = True
 

@@ -12,6 +12,8 @@ def create_modality_projector(cfg):
         return TransformerModalityProjector(cfg)
     elif cfg.mp_projection_type == 'hybrid':
         return HybridModalityProjector(cfg)
+    elif cfg.mp_projection_type == 'default':
+        return ImprovedModalityProjector(cfg)
 
 class ModalityProjector(nn.Module):
     def __init__(self, cfg):
@@ -372,6 +374,47 @@ class HybridModalityProjector(nn.Module):
         if self.use_layer_scale:
             print(f"LayerScale初始值: {self.layer_scale_init}")
         print("=" * 50)
+
+class ImprovedModalityProjector(nn.Module):
+    """改進的模態投影器"""
+    def __init__(self, audio_hidden_dim, lm_hidden_dim, target_length):
+        super().__init__()
+        
+        # 添加BatchNorm來穩定訓練
+        self.input_norm = nn.LayerNorm(audio_hidden_dim)
+        
+        # 使用更深的網絡來更好地對齊特徵空間
+        self.projector = nn.Sequential(
+            nn.Linear(audio_hidden_dim, lm_hidden_dim * 2),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(lm_hidden_dim * 2, lm_hidden_dim),
+            nn.LayerNorm(lm_hidden_dim),
+        )
+        
+        # 初始化權重
+        self._init_weights()
+        
+    def _init_weights(self):
+        """更好的權重初始化"""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                # 使用Xavier初始化
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+    
+    def forward(self, audio_features):
+        # 輸入歸一化
+        audio_features = self.input_norm(audio_features)
+        
+        # 投影到語言模型空間
+        projected = self.projector(audio_features)
+        
+        # 輸出歸一化以匹配文本嵌入的範圍
+        projected = projected * 0.1  # 縮放到合理範圍
+        
+        return projected
 
 class AttentionPooling(nn.Module):
     """改进的基于注意力的池化层"""
