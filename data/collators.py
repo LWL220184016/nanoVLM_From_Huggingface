@@ -1,5 +1,39 @@
 import torch
 
+# 這是一個專為對齊預訓練設計的、更簡單的 Collator
+class AlignmentCollator(object):
+    def __init__(self, tokenizer, text_max_length, audio_processor):
+        self.tokenizer = tokenizer
+        self.text_max_length = text_max_length
+        self.audio_processor = audio_processor # 假設您有音頻處理器
+        # 完整的句子模板
+        self.prompt_template = "Question: What is said in this audio? Answer: {}"
+
+    def __call__(self, batch):
+        # 1. 處理音頻
+        # audio_features = self.audio_processor([item["audio"]["array"] for item in batch], return_tensors="pt")
+        # 這裡簡化為您已有的 Torch 張量
+        audios = torch.stack([item["audio"] for item in batch])
+
+        # 2. 處理文本 (將轉錄稿填入模板)
+        full_texts = [self.prompt_template.format(item["transcription"]) for item in batch]
+        
+        # 3. 分詞，注意這裡不需要複雜的 label masking
+        encoded_texts = self.tokenizer.batch_encode_plus(
+            full_texts,
+            padding="max_length", # 或者 "longest"
+            truncation=True,
+            max_length=self.text_max_length,
+            return_tensors="pt"
+        )
+
+        # 返回對齊任務需要的數據
+        return {
+            "audio": audios,
+            "input_ids": encoded_texts["input_ids"],
+            "attention_mask": encoded_texts["attention_mask"]
+        }
+
 class AudioQACollator(object):
     def __init__(self, tokenizer, max_text_length): # max_text_length 是 "提示+答案" 的總長度
         self.tokenizer = tokenizer
