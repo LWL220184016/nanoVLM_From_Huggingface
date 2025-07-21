@@ -95,7 +95,6 @@ class AudioLanguageModel(nn.Module):
         return logits
 
     # 在訓練過程中添加音頻-文本對齊驗證
-    # 在訓練過程中添加音頻-文本對齊驗證
     def validate_audio_text_alignment(self, input_ids, audio, attention_mask=None):
         """驗證音頻和文本的對齊效果"""
         self.eval()
@@ -114,6 +113,121 @@ class AudioLanguageModel(nn.Module):
             similarity = torch.cosine_similarity(audio_pooled, text_pooled, dim=-1)
             
             return similarity.mean().item()
+        
+    def validate_audio_text_alignment_v2(self, input_ids, audio, attention_mask=None):
+        """驗證音頻和文本的對齊效果"""
+        self.eval()
+        with torch.no_grad():
+            # 確保輸入在正確設備上
+            input_ids = input_ids.to(self.device)
+            audio = audio.to(self.device)
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(self.device)
+            
+            # 獲取音頻嵌入
+            encoder_outputs = self.audio_encoder.encoder(audio, output_hidden_states=True)
+            audio_features = encoder_outputs.last_hidden_state
+            audio_embeds = self.MP(audio_features)
+            
+            # 獲取文本嵌入
+            text_embeds = self.decoder.token_embedding(input_ids)
+            
+            # 音頻池化（簡單平均）
+            audio_pooled = audio_embeds.mean(dim=1)  # [B, audio_dim]
+            
+            # 文本池化（考慮 attention_mask）
+            if attention_mask is not None:
+                # 使用 attention_mask 進行加權平均
+                mask_expanded = attention_mask.unsqueeze(-1).expand(text_embeds.size()).float()
+                sum_embeddings = torch.sum(text_embeds * mask_expanded, 1)
+                sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+                text_pooled = sum_embeddings / sum_mask  # [B, text_dim]
+            else:
+                text_pooled = text_embeds.mean(dim=1)  # [B, text_dim]
+            
+            # 檢查維度是否匹配
+            if audio_pooled.shape[-1] != text_pooled.shape[-1]:
+                # 如果維度不匹配，需要投影到相同維度
+                if not hasattr(self, 'alignment_projection'):
+                    # 創建投影層（這應該在模型初始化時做）
+                    min_dim = min(audio_pooled.shape[-1], text_pooled.shape[-1])
+                    self.audio_proj = nn.Linear(audio_pooled.shape[-1], min_dim).to(self.device)
+                    self.text_proj = nn.Linear(text_pooled.shape[-1], min_dim).to(self.device)
+                
+                audio_pooled = self.audio_proj(audio_pooled)
+                text_pooled = self.text_proj(text_pooled)
+            
+            # 歸一化特徵
+            audio_pooled = F.normalize(audio_pooled, p=2, dim=-1)
+            text_pooled = F.normalize(text_pooled, p=2, dim=-1)
+            
+            # 計算餘弦相似度
+            similarity = torch.cosine_similarity(audio_pooled, text_pooled, dim=-1)
+            
+            # 返回平均相似度
+            return similarity.mean().item()
+        
+    def validate_audio_text_alignment_v3(self, input_ids, audio, attention_mask=None):
+        """使用檢索任務評估對齊效果"""
+        self.eval()
+        with torch.no_grad():
+            batch_size = input_ids.shape[0]
+            
+            # 確保輸入在正確設備上
+            input_ids = input_ids.to(self.device)
+            audio = audio.to(self.device)
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(self.device)
+            
+            # 獲取音頻嵌入
+            encoder_outputs = self.audio_encoder.encoder(audio, output_hidden_states=True)
+            audio_features = encoder_outputs.last_hidden_state
+            audio_embeds = self.MP(audio_features)
+            
+            # 獲取文本嵌入
+            text_embeds = self.decoder.token_embedding(input_ids)
+            
+            # 音頻池化（簡單平均）
+            audio_pooled = audio_embeds.mean(dim=1)  # [B, audio_dim]
+            
+            # 文本池化（考慮 attention_mask）
+            if attention_mask is not None:
+                # 使用 attention_mask 進行加權平均
+                mask_expanded = attention_mask.unsqueeze(-1).expand(text_embeds.size()).float()
+                sum_embeddings = torch.sum(text_embeds * mask_expanded, 1)
+                sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+                text_pooled = sum_embeddings / sum_mask  # [B, text_dim]
+            else:
+                text_pooled = text_embeds.mean(dim=1)  # [B, text_dim]
+            
+            # 檢查維度是否匹配
+            if audio_pooled.shape[-1] != text_pooled.shape[-1]:
+                # 如果維度不匹配，需要投影到相同維度
+                if not hasattr(self, 'alignment_projection'):
+                    # 創建投影層（這應該在模型初始化時做）
+                    min_dim = min(audio_pooled.shape[-1], text_pooled.shape[-1])
+                    self.audio_proj = nn.Linear(audio_pooled.shape[-1], min_dim).to(self.device)
+                    self.text_proj = nn.Linear(text_pooled.shape[-1], min_dim).to(self.device)
+                
+                audio_pooled = self.audio_proj(audio_pooled)
+                text_pooled = self.text_proj(text_pooled)
+            
+            # 歸一化特徵
+            audio_pooled = F.normalize(audio_pooled, p=2, dim=-1)
+            text_pooled = F.normalize(text_pooled, p=2, dim=-1)
+            
+            # 計算所有可能的音頻-文本對的相似度
+            similarities = torch.matmul(audio_pooled, text_pooled.T)  # [B, B]
+            
+            # 計算檢索準確率
+            # 對於每個音頻，看是否能正確檢索到對應文本
+            audio_to_text_acc = (similarities.argmax(dim=1) == torch.arange(batch_size).to(self.device)).float().mean()
+            
+            # 對於每個文本，看是否能正確檢索到對應音頻
+            text_to_audio_acc = (similarities.argmax(dim=0) == torch.arange(batch_size).to(self.device)).float().mean()
+            
+            # 返回雙向檢索的平均準確率
+            return (audio_to_text_acc + text_to_audio_acc).item() / 2
 
     # 在生成時添加調試信息
     @torch.no_grad()

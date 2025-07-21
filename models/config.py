@@ -83,7 +83,7 @@ class ALMConfig:
     lm_tie_weights: bool = True
 
     # 模態投影器配置
-    mp_projection_type: str = 'adaptive' # adaptive, transformer, 
+    mp_projection_type: str = 'transformer' # adaptive, transformer, 
     mp_target_length: int = 25
     mp_use_position_aware: bool = True
 
@@ -101,7 +101,7 @@ class ALMConfig:
 @dataclass
 class TrainConfig:
     mp_pretrain_epochs: int = 3
-    mp_pretrain_lr: float = 1e-4  # 预训练使用较高学习率
+    mp_pretrain_lr: float = 5e-6  # 预训练使用较高学习率
 
     lr_mp: float = 5e-6
     lr_backbones: float = 1e-6
