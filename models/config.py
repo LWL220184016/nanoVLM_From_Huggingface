@@ -79,7 +79,7 @@ class ALMConfig:
     lm_dropout: float = 0.0
     lm_attn_scaling: float = 1.0
     lm_eos_token_id: int = 0
-    lm_use_tokens: bool = False
+    lm_use_tokens: bool = True # default = false
     lm_tie_weights: bool = True
 
     # 模態投影器配置

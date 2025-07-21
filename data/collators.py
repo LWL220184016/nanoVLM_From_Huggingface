@@ -28,6 +28,8 @@ class AlignmentCollator(object):
         )
         print(f"Debug(collators): Encoded texts: {encoded_texts}")  # Debugging line to check encoded texts
         print(f"Debug(collators): Encoded texts type: {type(encoded_texts)}")  # Debugging line to check encoded texts
+        print(f"Debug(collators): Encoded texts type: {tyinputpe(encoded_texts["input_ids"])}")  # Debugging line to check encoded texts
+        print(f"Debug(collators): Encoded texts type: {type(encoded_texts["attention_mask"])}")  # Debugging line to check encoded texts
 
         # 返回對齊任務需要的數據
         return {
