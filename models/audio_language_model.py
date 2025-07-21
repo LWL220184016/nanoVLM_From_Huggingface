@@ -77,7 +77,14 @@ class AudioLanguageModel(nn.Module):
         decoder_output_embeds = self.decoder(inputs_embeds, attention_mask=combined_attention_mask)
         
         # 必须通过 head 获取 logits
-        logits = self.decoder.head(decoder_output_embeds)
+        try:
+            logits = self.decoder.head(decoder_output_embeds[0])
+        except TypeError:
+            print(f"Debug(AudioLanguageModel.forward): decoder_output_embeds = {decoder_output_embeds}")
+            print(f"Debug(AudioLanguageModel.forward): decoder_output_embeds[0].shape = {decoder_output_embeds[0].shape}")
+
+            logits = self.decoder.head(decoder_output_embeds[1])
+
         
         # 只对文本部分计算损失
         if targets is not None:
@@ -304,7 +311,7 @@ class AudioLanguageModel(nn.Module):
     # 其他方法（save_pretrained, from_pretrained, push_to_hub）可以参考原来的AudioLanguageModel实现
     @classmethod
     def from_pretrained(
-        cls, repo_id_or_path: str, *, revision: Optional[str] = None
+        cls, repo_id_or_path: str,
     ) -> "AudioLanguageModel":
         """
         Load a VisionLanguageModel from a local directory or a repo on the Hugging Face Hub.
@@ -317,6 +324,9 @@ class AudioLanguageModel(nn.Module):
         """
         # If local folder exists => load from there
         if os.path.exists(repo_id_or_path):
+            print("=================================================")
+            print("load model from local")
+            print("=================================================")
             config_path = os.path.join(repo_id_or_path, "config.json")
             weights_path = os.path.join(repo_id_or_path, "model.safetensors")
 
@@ -330,13 +340,8 @@ class AudioLanguageModel(nn.Module):
                 )
         # Otherwise, assume it's a Hugging Face Hub repo
         else:
-            from huggingface_hub import hf_hub_download
-
-            config_path = hf_hub_download(
-                repo_id=repo_id_or_path, filename="config.json", revision=revision
-            )
-            weights_path = hf_hub_download(
-                repo_id=repo_id_or_path, filename="model.safetensors", revision=revision
+            raise ValueError(
+                f"Path {repo_id_or_path} not exist. Please provide a valid path."
             )
 
         # Load config

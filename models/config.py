@@ -79,7 +79,7 @@ class ALMConfig:
     lm_dropout: float = 0.0
     lm_attn_scaling: float = 1.0
     lm_eos_token_id: int = 0
-    lm_use_tokens: bool = True # default = false
+    lm_use_tokens: bool = False # default = false
     lm_tie_weights: bool = True
 
     # 模態投影器配置
@@ -117,7 +117,7 @@ class TrainConfig:
     stage3_epochs: int = 8  
 
     eval_in_epochs: bool = False # Deactivating this in colab, because it would evaluate 1500 samples of SAVEE every time otherwise
-    resume_from_alm_checkpoint: bool = False # Indicate if the training should be resumed from a checkpoint of the whole ALM or you want to start from scratch
+    resume_from_alm_checkpoint: bool = True # Indicate if the training should be resumed from a checkpoint of the whole ALM or you want to start from scratch
 
     # EOS token强化训练
     force_eos_training: bool = True
