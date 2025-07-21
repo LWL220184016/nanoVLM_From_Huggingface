@@ -26,6 +26,8 @@ class AlignmentCollator(object):
             max_length=self.text_max_length,
             return_tensors="pt"
         )
+        print(f"Debug(collators): Encoded texts: {encoded_texts}")  # Debugging line to check encoded texts
+        print(f"Debug(collators): Encoded texts type: {type(encoded_texts)}")  # Debugging line to check encoded texts
 
         # 返回對齊任務需要的數據
         return {

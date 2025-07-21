@@ -17,11 +17,8 @@ class AudioQADataset(Dataset): # https://huggingface.co/datasets/AbstractTTS/IEM
     def __getitem__(self, idx):
         item = self.dataset[idx]
         
-        try:
-            audio_feature_dict = item['wav']
-        except KeyError:
-            audio_feature_dict = item['audio'] # Get the dictionary containing audio data
-            
+        audio_feature_dict = item['wav'] if 'wav' in item else item['audio']  # Get the dictionary containing audio data
+
         raw_audio_array = None
         original_sampling_rate = None
         _sr_from_bytes_decode = None
