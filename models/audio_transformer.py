@@ -291,10 +291,10 @@ class AudioTransformer_from_HF():
         super().__init__()
         self.cfg = cfg
         
-        self.asr_model = self.from_pretrained(cfg)
+        self.audio_encoder = self.from_pretrained(cfg)
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.asr_model.to(self.device)
-        self.asr_model.eval()
+        self.audio_encoder.to(self.device)
+        self.audio_encoder.eval()
         self.datatype = torch.float32
         
 
@@ -310,7 +310,7 @@ class AudioTransformer_from_HF():
         # 產生音訊編碼 (encoder embeddings)
         with torch.no_grad():
             # 直接呼叫模型的 encoder
-            encoder_outputs = self.asr_model.encoder(audio, output_hidden_states=output_hidden_states)
+            encoder_outputs = self.audio_encoder(audio, output_hidden_states=output_hidden_states)
 
         # 提取最後一層的隱藏狀態
         # 這就是音訊的編碼/嵌入
@@ -327,4 +327,4 @@ class AudioTransformer_from_HF():
         # processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3") # moved to AudioProcessor in porcessors.py
         asr_model = WhisperModel.from_pretrained(cfg.audio_model_type)
 
-        return asr_model
+        return asr_model.encoder

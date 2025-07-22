@@ -21,7 +21,7 @@ class AudioLanguageModel(nn.Module):
         self.cfg = cfg
         if load_backbone:
             print("Loading from backbone weights")
-            self.audio_encoder = AudioTransformer.from_pretrained(cfg)
+            self.audio_encoder = AudioTransformer(cfg)
             self.decoder = LanguageModel.from_pretrained(cfg)
         else:
             self.audio_encoder = AudioTransformer(cfg)
@@ -44,7 +44,7 @@ class AudioLanguageModel(nn.Module):
             # transformers 庫, 因此會呼叫解碼器然後報錯, 需要直接呼叫模型的編碼器才行
             # audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
             input_features = audio.to(self.device)
-            audio_features = self.audio_encoder.encoder(input_features, output_hidden_states=True)
+            audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
             audio_embeddings = audio_features.last_hidden_state.detach()  # 分離梯度
         
         # 重新啟用梯度用於模態投影器
@@ -108,7 +108,8 @@ class AudioLanguageModel(nn.Module):
         with torch.no_grad():
             # 獲取音頻和文本嵌入
             input_features = audio.to(self.device)
-            encoder_outputs = self.audio_encoder.encoder(input_features, output_hidden_states=True)
+
+            encoder_outputs = self.audio_encoder.forward(input_features, output_hidden_states=True)
             audio_features = encoder_outputs.last_hidden_state
             audio_embeds = self.MP(audio_features)
             
@@ -132,7 +133,7 @@ class AudioLanguageModel(nn.Module):
                 attention_mask = attention_mask.to(self.device)
             
             # 獲取音頻嵌入
-            encoder_outputs = self.audio_encoder.encoder(audio, output_hidden_states=True)
+            encoder_outputs = self.audio_encoder.forward(audio, output_hidden_states=True)
             audio_features = encoder_outputs.last_hidden_state
             audio_embeds = self.MP(audio_features)
             
@@ -187,7 +188,7 @@ class AudioLanguageModel(nn.Module):
                 attention_mask = attention_mask.to(self.device)
             
             # 獲取音頻嵌入
-            encoder_outputs = self.audio_encoder.encoder(audio, output_hidden_states=True)
+            encoder_outputs = self.audio_encoder.forward(audio, output_hidden_states=True)
             audio_features = encoder_outputs.last_hidden_state
             audio_embeds = self.MP(audio_features)
             
