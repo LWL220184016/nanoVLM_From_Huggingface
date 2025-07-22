@@ -45,7 +45,7 @@ class AudioLanguageModel(nn.Module):
             # audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
             input_features = audio.to(self.device)
             audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
-            audio_embeddings = audio_features.last_hidden_state.detach()  # 分離梯度
+            audio_embeddings = audio_features.detach()  # 分離梯度
         
         # 重新啟用梯度用於模態投影器
         audio_embeddings.requires_grad_(True)
