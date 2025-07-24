@@ -35,16 +35,12 @@ class AlignmentCollator(object):
         }
 
 class AudioQACollator(object):
-    def __init__(self, tokenizer, max_text_length): # max_text_length 是 "提示+答案" 的總長度
+    def __init__(self, tokenizer, max_text_length, audio_patches):
         self.tokenizer = tokenizer
         self.max_text_length = max_text_length
-        # 移除 self.prompt_text，改用聊天模板
-        # 確保 tokenizer 有 chat_template
+        self.audio_patches = audio_patches # 音訊嵌入的長度
         if self.tokenizer.chat_template is None:
-            raise ValueError(
-                "The tokenizer must have a chat_template. "
-                "You can either manually set it or use a model that has one."
-            )
+            raise ValueError("The tokenizer must have a chat_template.")
 
     def __call__(self, batch):
         audio_data = [item["audio"] for item in batch]
@@ -55,47 +51,55 @@ class AudioQACollator(object):
         all_labels = []
 
         for trans in transcriptions:
-            # 1. 構造對話消息
-            # 確保答案以 EOS token 結尾，引導模型學會停止生成
             eos_token = self.tokenizer.eos_token or ""
             if not trans.strip().endswith(eos_token):
                 trans += eos_token
             
             messages = [
-                {"role": "user", "content": "What is said in this audio?"},
+                {"role": "user", "content": "What is said in this audio? <AUDIO>"},
                 {"role": "assistant", "content": trans}
             ]
 
-            # 2. 使用 apply_chat_template 生成完整的 input_ids
-            # 這會處理好所有特殊 token 和格式
+            # 1. Tokenize 完整的對話，得到 input_ids
             full_input_ids = self.tokenizer.apply_chat_template(
-                messages, 
-                tokenize=True, 
-                add_generation_prompt=False # 我們提供了完整的對話，所以設為 False
+                messages, tokenize=True, add_generation_prompt=False
             )
 
-            # 3. 創建 labels，只保留 assistant 回答的部分
-            # 為了找到答案的起始點，我們只模板化用戶的部分
-            # add_generation_prompt=True 會在用戶消息後添加提示，讓模型準備好生成回答
-            # 例如，它可能會添加 `[/INST]` 或 `<|start_header_id|>assistant<|end_header_id|>\n\n`
-            prompt_only_ids = self.tokenizer.apply_chat_template(
-                messages[:-1], # 只包含 user 消息
-                tokenize=True,
-                add_generation_prompt=True
+            # 2. 找到 <AUDIO> token 和答案的起始位置
+            # 我們需要一個沒有答案的版本來定位
+            prompt_messages = messages[:-1]
+            prompt_ids = self.tokenizer.apply_chat_template(
+                prompt_messages, tokenize=True, add_generation_prompt=True
             )
             
+            try:
+                # 找到 <AUDIO> token 在 input_ids 中的索引
+                audio_token_idx = full_input_ids.index(self.tokenizer.convert_tokens_to_ids('<AUDIO>'))
+            except ValueError:
+                # 如果模板不包含 <AUDIO>，這是一個錯誤
+                raise ValueError("'<AUDIO>' token not found in the tokenized prompt. Check your chat template.")
+
+            # 答案開始的索引
+            answer_start_index = len(prompt_ids)
+
+            # 3. 創建與最終 logits 維度匹配的 labels
+            # 初始標籤，全部忽略
             labels = [-100] * len(full_input_ids)
             
-            # assistant 的回答部分就是 full_input_ids 中 prompt_only_ids 後面的部分
-            answer_start_index = len(prompt_only_ids)
+            # 將答案部分的標籤替換為真實的 token ID
             labels[answer_start_index:] = full_input_ids[answer_start_index:]
+
+            # 4. *** 核心修改：為音訊嵌入調整 labels ***
+            # 在 <AUDIO> token 的位置，插入 N 個 -100，N = 音訊 patch 數量
+            # 這模擬了 forward 函數中的嵌入替換過程
+            audio_padding = [-100] * self.audio_patches
+            # 將 <AUDIO> token 對應的單個 -100 標籤替換為 N 個 -100
+            final_labels = labels[:audio_token_idx] + audio_padding + labels[audio_token_idx + 1:]
             
             all_input_ids.append(torch.tensor(full_input_ids))
-            all_labels.append(torch.tensor(labels))
+            all_labels.append(torch.tensor(final_labels))
 
-        # 4. 對 batch 進行填充
-        # 因為我們是逐個處理的，所以需要手動填充
-        # 注意：Hugging Face 的 DataCollatorForSeq2Seq 或類似工具可以自動化這一步
+        # 5. 填充 batch
         input_ids = torch.nn.utils.rnn.pad_sequence(
             all_input_ids, 
             batch_first=True, 
@@ -104,14 +108,15 @@ class AudioQACollator(object):
         labels = torch.nn.utils.rnn.pad_sequence(
             all_labels, 
             batch_first=True, 
-            padding_value=-100 # label 的填充值是 -100
+            padding_value=-100
         )
 
-        # 5. 截斷到最大長度
-        input_ids = input_ids[:, :self.max_text_length]
-        labels = labels[:, :self.max_text_length]
+        # 6. 截斷到最大長度
+        # 注意：這裡的最大長度需要考慮到音訊 patch 的增加
+        final_max_length = self.max_text_length + self.audio_patches
+        input_ids = input_ids[:, :self.max_text_length] # input_ids 保持原長度
+        labels = labels[:, :final_max_length]          # labels 擴展到新長度
         
-        # 6. 創建 attention_mask
         attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
 
         return {

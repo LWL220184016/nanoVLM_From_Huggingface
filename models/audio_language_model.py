@@ -16,9 +16,11 @@ import torch.nn.functional as F
 from safetensors.torch import load_model, save_model
 
 class AudioLanguageModel(nn.Module):
-    def __init__(self, cfg: ALMConfig, load_backbone=True):
+    def __init__(self, cfg: ALMConfig, load_backbone=True, tokenizer=None):
         super().__init__()
         self.cfg = cfg
+        self.tokenizer = tokenizer
+
         if load_backbone:
             print("Loading from backbone weights")
             self.audio_encoder = AudioTransformer(cfg)
@@ -26,156 +28,101 @@ class AudioLanguageModel(nn.Module):
         else:
             self.audio_encoder = AudioTransformer(cfg)
             self.decoder = LanguageModel(cfg)
+        
+        # 添加特殊 token 並調整嵌入層
+        special_tokens_dict = {'additional_special_tokens': ['<AUDIO>']}
+        self.tokenizer.add_special_tokens(special_tokens_dict)
+        self.decoder.resize_token_embeddings(len(self.tokenizer))
+        self.audio_token_id = self.tokenizer.convert_tokens_to_ids('<AUDIO>')
+
         self.MP = create_modality_projector(cfg)
         self.load_backbone = load_backbone
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def forward(self, input_ids, audio, attention_mask=None, targets=None):
+    def _prepare_decoder_inputs(self, input_ids, audio, attention_mask=None):
         """
-        input_ids: [batch_size, seq_length] 文本token
-        audio: [batch_size, audio_length] 原始音频波形
-        attention_mask: [batch_size, seq_length] 注意力掩码
-        targets: [batch_size, seq_length] 目标token（用于训练）
+        一個內部輔助函數，封裝了從原始輸入到解碼器輸入嵌入的完整過程。
+        這是 forward 和 generate 之間的共享邏輯。
         """
         batch_size = input_ids.shape[0]
-    
-        with torch.no_grad():  # 在音頻編碼時關閉梯度計算
-            # 因為首次訓練要載入的是 OpenAI Whisper 的官方模型, 使用的函數 forward 不是 AudioTransformer_from_HF 的而是 
-            # transformers 庫, 因此會呼叫解碼器然後報錯, 需要直接呼叫模型的編碼器才行
-            # audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
+
+        # 1. 音頻編碼和投影
+        # 注意：在 generate 中，audio_encoder 可能不需要梯度
+        is_training = self.training
+        with torch.set_grad_enabled(is_training and self.cfg.unfreeze_audio_encoder_when_training):
             input_features = audio.to(self.device)
-            audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
-            audio_embeddings = audio_features.detach()  # 分離梯度
+            audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True).last_hidden_state
         
-        # 重新啟用梯度用於模態投影器
-        audio_embeddings.requires_grad_(True)
-        audio_embeds = self.MP(audio_embeddings)  # [B, num_patches, lm_hidden_dim]
-        
-        # 获取文本嵌入
+        audio_embeds = self.MP(audio_features)  # [B, num_audio_patches, lm_hidden_dim]
+
+        # 2. 獲取文本嵌入
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, seq_len, lm_hidden_dim]
+
+        # 3. 將音訊嵌入插入到 <AUDIO> token 的位置
+        final_embeds = []
+        final_attention_mask = []
+        for i in range(batch_size):
+            audio_token_idx = (input_ids[i] == self.audio_token_id).nonzero(as_tuple=True)[0]
+            
+            if len(audio_token_idx) == 0:
+                # 在訓練和生成時都應報錯，因為這是數據準備階段的問題
+                raise ValueError(f"<AUDIO> token not found in sample {i}. Check your data collator.")
+
+            audio_token_idx = audio_token_idx[0]
+
+            # 拼接嵌入
+            current_embeds = torch.cat([
+                text_embeds[i, :audio_token_idx],
+                audio_embeds[i],
+                text_embeds[i, audio_token_idx + 1:]
+            ], dim=0)
+            final_embeds.append(current_embeds)
+
+            # 創建對應的注意力掩碼
+            if attention_mask is not None:
+                audio_attn = torch.ones(audio_embeds.shape[1], device=self.device, dtype=attention_mask.dtype)
+                current_mask = torch.cat([
+                    attention_mask[i, :audio_token_idx],
+                    audio_attn,
+                    attention_mask[i, audio_token_idx + 1:]
+                ], dim=0)
+                final_attention_mask.append(current_mask)
+
+        # 4. 將 batch 中的樣本填充到相同的長度
+        inputs_embeds = torch.nn.utils.rnn.pad_sequence(final_embeds, batch_first=True)
         
-        # 拼接音频和文本嵌入
-        inputs_embeds = torch.cat([audio_embeds, text_embeds], dim=1)
-        
-        # 创建组合的注意力掩码
+        combined_attention_mask = None
         if attention_mask is not None:
-            # 为音频部分创建全1的掩码
-            audio_attention_mask = torch.ones(
-                batch_size, audio_embeds.shape[1], 
-                device=attention_mask.device, dtype=attention_mask.dtype
-            )
-            # 拼接音频和文本的注意力掩码
-            combined_attention_mask = torch.cat([audio_attention_mask, attention_mask], dim=1)
-        else:
-            # 如果原始 attention_mask 為 None，則為整個序列創建一個全1的掩碼
-            combined_attention_mask = torch.ones(
-                batch_size, inputs_embeds.shape[1],
-                device=inputs_embeds.device, dtype=torch.long
-            )
+            combined_attention_mask = torch.nn.utils.rnn.pad_sequence(final_attention_mask, batch_first=True)
         
-        # 通过语言模型 (self.cfg.lm_use_tokens is False, so self.decoder() returns embeddings)
-        decoder_output_embeds = self.decoder(inputs_embeds, attention_mask=combined_attention_mask)
+        return inputs_embeds, combined_attention_mask
+
+    def forward(self, input_ids, audio, attention_mask=None, targets=None):
+        """
+        訓練時調用
+        """
+        # 調用共享函數來準備輸入
+        inputs_embeds, combined_attention_mask = self._prepare_decoder_inputs(
+            input_ids, audio, attention_mask
+        )
+
+        # 通过语言模型
+        decoder_output_embeds = self.decoder(inputs_embeds=inputs_embeds, attention_mask=combined_attention_mask)
         
-        # 必须通过 head 获取 logits
         try:
             logits = self.decoder.head(decoder_output_embeds[0])
-        except TypeError:
-            print(f"Debug(AudioLanguageModel.forward): decoder_output_embeds = {decoder_output_embeds}")
-            print(f"Debug(AudioLanguageModel.forward): decoder_output_embeds[0].shape = {decoder_output_embeds[0].shape}")
-
+        except (TypeError, IndexError):
             logits = self.decoder.head(decoder_output_embeds[1])
 
-        
-        # 只对文本部分计算损失
         if targets is not None:
-            # logits 的文本部分从 audio_embeds.shape[1] 开始
-            text_logits = logits[:, audio_embeds.shape[1]:, :] 
-            # Causal LM loss: 预测下一个 token, 所以 logits 和 labels 需要移位
-            shift_logits = text_logits[..., :-1, :].contiguous()
-            shift_labels = targets[..., 1:].contiguous() # targets 对应原始的 input_ids (文本部分)
-            
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            
+            loss = loss_fct(logits.view(-1, logits.size(-1)), targets.view(-1))
             return logits, loss
         
         return logits
 
     # 在訓練過程中添加音頻-文本對齊驗證
     def validate_audio_text_alignment(self, input_ids, audio, attention_mask=None):
-        """驗證音頻和文本的對齊效果"""
-        self.eval()
-        with torch.no_grad():
-            # 獲取音頻和文本嵌入
-            input_features = audio.to(self.device)
-
-            encoder_outputs = self.audio_encoder.forward(input_features, output_hidden_states=True)
-            audio_features = encoder_outputs.last_hidden_state
-            audio_embeds = self.MP(audio_features)
-            
-            text_embeds = self.decoder.token_embedding(input_ids)
-            
-            # 計算相似度
-            audio_pooled = audio_embeds.mean(dim=1)
-            text_pooled = text_embeds.mean(dim=1)
-            similarity = torch.cosine_similarity(audio_pooled, text_pooled, dim=-1)
-            
-            return similarity.mean().item()
-        
-    def validate_audio_text_alignment_v2(self, input_ids, audio, attention_mask=None):
-        """驗證音頻和文本的對齊效果"""
-        self.eval()
-        with torch.no_grad():
-            # 確保輸入在正確設備上
-            input_ids = input_ids.to(self.device)
-            audio = audio.to(self.device)
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(self.device)
-            
-            # 獲取音頻嵌入
-            encoder_outputs = self.audio_encoder.forward(audio, output_hidden_states=True)
-            audio_features = encoder_outputs.last_hidden_state
-            audio_embeds = self.MP(audio_features)
-            
-            # 獲取文本嵌入
-            text_embeds = self.decoder.token_embedding(input_ids)
-            
-            # 音頻池化（簡單平均）
-            audio_pooled = audio_embeds.mean(dim=1)  # [B, audio_dim]
-            
-            # 文本池化（考慮 attention_mask）
-            if attention_mask is not None:
-                # 使用 attention_mask 進行加權平均
-                mask_expanded = attention_mask.unsqueeze(-1).expand(text_embeds.size()).float()
-                sum_embeddings = torch.sum(text_embeds * mask_expanded, 1)
-                sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
-                text_pooled = sum_embeddings / sum_mask  # [B, text_dim]
-            else:
-                text_pooled = text_embeds.mean(dim=1)  # [B, text_dim]
-            
-            # 檢查維度是否匹配
-            if audio_pooled.shape[-1] != text_pooled.shape[-1]:
-                # 如果維度不匹配，需要投影到相同維度
-                if not hasattr(self, 'alignment_projection'):
-                    # 創建投影層（這應該在模型初始化時做）
-                    min_dim = min(audio_pooled.shape[-1], text_pooled.shape[-1])
-                    self.audio_proj = nn.Linear(audio_pooled.shape[-1], min_dim).to(self.device)
-                    self.text_proj = nn.Linear(text_pooled.shape[-1], min_dim).to(self.device)
-                
-                audio_pooled = self.audio_proj(audio_pooled)
-                text_pooled = self.text_proj(text_pooled)
-            
-            # 歸一化特徵
-            audio_pooled = F.normalize(audio_pooled, p=2, dim=-1)
-            text_pooled = F.normalize(text_pooled, p=2, dim=-1)
-            
-            # 計算餘弦相似度
-            similarity = torch.cosine_similarity(audio_pooled, text_pooled, dim=-1)
-            
-            # 返回平均相似度
-            return similarity.mean().item()
-        
-    def validate_audio_text_alignment_v3(self, input_ids, audio, attention_mask=None):
         """使用檢索任務評估對齊效果"""
         self.eval()
         with torch.no_grad():
@@ -254,39 +201,19 @@ class AudioLanguageModel(nn.Module):
         self.eval()
         batch_size = input_ids.shape[0]
         
-        # 编码音频
-        audio_features = self.audio_encoder.forward(audio, output_hidden_states=True) # [B, num_patches, audio_hidden_dim]
-        audio_embeds = self.MP(audio_features)  # [B, num_patches, lm_hidden_dim]
-        
-        # 获取初始文本嵌入
-        text_embeds = self.decoder.token_embedding(input_ids)
-        
-        # 拼接音频和文本嵌入
-        current_sequence_embeds = torch.cat([audio_embeds, text_embeds], dim=1)
-        
-        # 创建注意力掩码
-        if attention_mask is not None: 
-            audio_attention_mask = torch.ones(
-                batch_size, audio_embeds.shape[1], 
-                device=attention_mask.device, dtype=attention_mask.dtype
-            )
-            current_attention_mask = torch.cat([audio_attention_mask, attention_mask], dim=1)
-        else: 
-            current_attention_mask = torch.ones(
-                batch_size, current_sequence_embeds.shape[1], 
-                device=current_sequence_embeds.device, dtype=torch.long
-            )
+        # 調用共享函數來準備初始輸入
+        current_sequence_embeds, current_attention_mask = self._prepare_decoder_inputs(
+            input_ids, audio, attention_mask
+        )
         
         generated_tokens_ids_list = [] 
         
         for _ in range(max_new_tokens):
-            # 通过语言模型 (self.decoder.lm_use_tokens is False, so self.decoder() returns embeddings)
-            decoder_output_embeds = self.decoder(current_sequence_embeds, attention_mask=current_attention_mask)
+            # 注意：這裡傳入的是已經準備好的 embeds
+            outputs = self.decoder.decoder(inputs_embeds=current_sequence_embeds, attention_mask=current_attention_mask)
+            decoder_output_embeds = outputs.last_hidden_state
             
-            # 获取最后一个token的输出嵌入 (对应下一个token的预测)
             last_token_embed_from_decoder = decoder_output_embeds[:, -1, :]
-            
-            # 通过 head 层得到 logits
             last_token_logits = self.decoder.head(last_token_embed_from_decoder)
                 
             if greedy:
@@ -298,11 +225,13 @@ class AudioLanguageModel(nn.Module):
             
             generated_tokens_ids_list.append(next_token_id)
             
-            # 将新token转换为embedding并添加到序列中，为下一次迭代做准备
+            # 檢查是否生成了 EOS token
+            if next_token_id.item() == self.tokenizer.eos_token_id:
+                break
+
             next_token_embed = self.decoder.token_embedding(next_token_id)
             current_sequence_embeds = torch.cat((current_sequence_embeds, next_token_embed), dim=1)
             
-            # 更新注意力掩码
             new_mask_segment = torch.ones(batch_size, 1, device=current_attention_mask.device, dtype=current_attention_mask.dtype)
             current_attention_mask = torch.cat([current_attention_mask, new_mask_segment], dim=1)
         
