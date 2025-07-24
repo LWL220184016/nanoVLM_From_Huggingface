@@ -406,6 +406,43 @@ class LanguageModel(nn.Module):
 
         self.apply(self._init_weights)
 
+    def resize_token_embeddings(self, new_num_tokens: int):
+        """
+        Resizes the token embeddings and the output head to accommodate a new vocabulary size.
+        This method manually implements the functionality of Hugging Face's resize_token_embeddings.
+        """
+        old_embeddings = self.token_embedding
+        old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
+
+        if old_num_tokens == new_num_tokens:
+            return
+
+        # 1. Create a new embedding layer
+        new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
+        new_embeddings.to(old_embeddings.weight.device, dtype=old_embeddings.weight.dtype)
+
+        # 2. Copy the old weights to the new layer
+        new_embeddings.weight.data[:old_num_tokens, :] = old_embeddings.weight.data
+
+        # 3. Initialize the new weights
+        torch.nn.init.normal_(new_embeddings.weight.data[old_num_tokens:], mean=0.0, std=0.02)
+
+        self.token_embedding = new_embeddings
+        self.cfg.lm_vocab_size = new_num_tokens # Update vocab size in config
+
+        # 4. If weights are tied, update the head as well
+        if self.lm_tie_weights:
+            self.head.weight = self.token_embedding.weight
+        else:
+            # If not tied, we need to resize the head layer separately
+            old_head = self.head
+            new_head = nn.Linear(old_embedding_dim, new_num_tokens, bias=False)
+            new_head.to(old_head.weight.device, dtype=old_head.weight.dtype)
+            
+            new_head.weight.data[:old_num_tokens, :] = old_head.weight.data
+            torch.nn.init.normal_(new_head.weight.data[old_num_tokens:], mean=0.0, std=0.02)
+            self.head = new_head
+
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
