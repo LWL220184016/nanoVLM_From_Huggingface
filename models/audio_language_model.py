@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from safetensors.torch import load_model, save_model
 
 class AudioLanguageModel(nn.Module):
-    def __init__(self, cfg: ALMConfig, load_backbone=True, tokenizer=None):
+    def __init__(self, cfg: ALMConfig, load_backbone=True, tokenizer=None, device=None):
         super().__init__()
         self.cfg = cfg
         self.tokenizer = tokenizer
@@ -37,7 +37,7 @@ class AudioLanguageModel(nn.Module):
 
         self.MP = create_modality_projector(cfg)
         self.load_backbone = load_backbone
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
 
     def _prepare_decoder_inputs(self, input_ids, audio, attention_mask=None):
         """
@@ -51,7 +51,7 @@ class AudioLanguageModel(nn.Module):
         is_training = self.training
         with torch.set_grad_enabled(is_training and self.cfg.unfreeze_audio_encoder_when_training):
             input_features = audio.to(self.device)
-            audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True).last_hidden_state
+            audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
         
         audio_embeds = self.MP(audio_features)  # [B, num_audio_patches, lm_hidden_dim]
 
@@ -107,7 +107,7 @@ class AudioLanguageModel(nn.Module):
         )
 
         # 通过语言模型
-        decoder_output_embeds = self.decoder(inputs_embeds=inputs_embeds, attention_mask=combined_attention_mask)
+        decoder_output_embeds = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
         
         try:
             logits = self.decoder.head(decoder_output_embeds[0])

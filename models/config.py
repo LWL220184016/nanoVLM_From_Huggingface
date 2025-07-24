@@ -21,6 +21,7 @@ class ALMConfig:
     audio_hop_length: int = 160  # 跳跃长度
     audio_n_mels: int = 80  # 梅尔滤波器数量
     audio_max_length: int = 1500  # 最大时间步数
+    audio_patches: int = 1500 # 音频patch数量
 
     unfreeze_audio_encoder_when_training: bool = False  # 是否在训练时解冻音频编码器
 

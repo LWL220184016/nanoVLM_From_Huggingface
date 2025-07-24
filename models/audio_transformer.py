@@ -287,12 +287,12 @@ class AudioTransformer_from_NeMo():
     
 class AudioTransformer_from_HF():
     """完整的音频Transformer编码器"""
-    def __init__(self, cfg):
+    def __init__(self, cfg, device):
         super().__init__()
         self.cfg = cfg
         
         self.audio_encoder = self.from_pretrained(cfg)
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = device
         self.audio_encoder.to(self.device)
         self.audio_encoder.eval()
         self.datatype = torch.float32
