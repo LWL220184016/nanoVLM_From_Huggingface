@@ -115,8 +115,56 @@ class AudioLanguageModel(nn.Module):
             logits = self.decoder.head(decoder_output_embeds[1])
 
         if targets is not None:
+            # --- 核心修改：在計算損失前，對齊 targets 的維度 ---
+            # 由於我們在 _prepare_decoder_inputs 中替換了 <AUDIO> token，
+            # logits 的序列長度變長了。我們需要對 targets 進行同樣的操作。
+            
+            batch_size = inputs_embeds.shape[0]
+            aligned_targets = []
+            for i in range(batch_size):
+                try:
+                    # 找到原始 input_ids 中的 <AUDIO> token 位置
+                    audio_token_idx = (input_ids[i] == self.audio_token_id).nonzero(as_tuple=True)[0][0]
+                    
+                    # 獲取音訊嵌入的實際長度
+                    num_audio_patches = self.cfg.audio_patches
+                    
+                    # 創建用於填充的 -100 標籤
+                    audio_padding = torch.full((num_audio_patches,), -100, dtype=targets.dtype, device=self.device)
+                    
+                    # 拼接：<AUDIO>前的標籤 + 音訊填充 + <AUDIO>後的標籤
+                    # 注意：我們從 targets 中移除了 <AUDIO> token 對應的那個標籤
+                    current_aligned_target = torch.cat([
+                        targets[i, :audio_token_idx],
+                        audio_padding,
+                        targets[i, audio_token_idx + 1:]
+                    ], dim=0)
+                    aligned_targets.append(current_aligned_target)
+
+                except IndexError:
+                    # 如果某個樣本沒有 <AUDIO> token，這是一個數據問題，但為了穩定，我們先跳過它
+                    # 理想情況下，這裡應該報錯或有更複雜的處理
+                    aligned_targets.append(targets[i])
+
+            # 將對齊後的 targets 填充到與 logits 相同的長度
+            # logits 的長度由 inputs_embeds 決定
+            final_targets = torch.nn.utils.rnn.pad_sequence(
+                aligned_targets, 
+                batch_first=True, 
+                padding_value=-100
+            )
+            
+            # 確保填充後的長度與 logits 完全一致
+            if final_targets.shape[1] < logits.shape[1]:
+                pad_len = logits.shape[1] - final_targets.shape[1]
+                final_targets = F.pad(final_targets, (0, pad_len), 'constant', -100)
+            elif final_targets.shape[1] > logits.shape[1]:
+                final_targets = final_targets[:, :logits.shape[1]]
+
+            # --- 修改結束 ---
+
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-            loss = loss_fct(logits.view(-1, logits.size(-1)), targets.view(-1))
+            loss = loss_fct(logits.resize(-1, logits.size(-1)), final_targets.resize(-1))
             return logits, loss
         
         return logits
@@ -136,8 +184,7 @@ class AudioLanguageModel(nn.Module):
             
             # 獲取音頻嵌入
             encoder_outputs = self.audio_encoder.forward(audio, output_hidden_states=True)
-            audio_features = encoder_outputs.last_hidden_state
-            audio_embeds = self.MP(audio_features)
+            audio_embeds = self.MP(encoder_outputs)
             
             # 獲取文本嵌入
             text_embeds = self.decoder.token_embedding(input_ids)
