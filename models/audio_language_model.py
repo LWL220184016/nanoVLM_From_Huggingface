@@ -23,10 +23,10 @@ class AudioLanguageModel(nn.Module):
 
         if load_backbone:
             print("Loading from backbone weights")
-            self.audio_encoder = AudioTransformer(cfg)
+            self.audio_encoder = AudioTransformer(cfg, device=device)
             self.decoder = LanguageModel.from_pretrained(cfg)
         else:
-            self.audio_encoder = AudioTransformer(cfg)
+            self.audio_encoder = AudioTransformer(cfg, device=device)
             self.decoder = LanguageModel(cfg)
         
         # 添加特殊 token 並調整嵌入層
