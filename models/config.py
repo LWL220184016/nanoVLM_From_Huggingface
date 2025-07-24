@@ -22,6 +22,8 @@ class ALMConfig:
     audio_n_mels: int = 80  # 梅尔滤波器数量
     audio_max_length: int = 1500  # 最大时间步数
 
+    unfreeze_audio_encoder_when_training: bool = False  # 是否在训练时解冻音频编码器
+
     # ========== 语言模型配置选项 ==========
     # 选项1: SmolLM2-135M (当前使用，较小)
     # lm_hidden_dim: int = 576

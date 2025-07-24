@@ -34,6 +34,11 @@ def main():
 
     print("Input IDs:", input_ids)
 
+    special_tokens_dict = {'additional_special_tokens': ['<AUDIO>']}
+    tokenizer.add_special_tokens(special_tokens_dict)
+    audio_token_id = tokenizer.convert_tokens_to_ids('<AUDIO>')
+
+    print("audio_token_id:", audio_token_id)
 
 if __name__ == "__main__":
     main()

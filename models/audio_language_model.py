@@ -241,7 +241,7 @@ class AudioLanguageModel(nn.Module):
     # 其他方法（save_pretrained, from_pretrained, push_to_hub）可以参考原来的AudioLanguageModel实现
     @classmethod
     def from_pretrained(
-        cls, repo_id_or_path: str,
+        cls, repo_id_or_path: str, tokenizer
     ) -> "AudioLanguageModel":
         """
         Load a VisionLanguageModel from a local directory or a repo on the Hugging Face Hub.
@@ -279,11 +279,11 @@ class AudioLanguageModel(nn.Module):
             cfg = ALMConfig(**json.load(f))
 
         # Initialize model without loading the backbone
-        model = cls(cfg, load_backbone=False)
+        model = cls(cfg, load_backbone=False, tokenizer=tokenizer)
 
         # Load safetensors weights
         load_model(model, weights_path, strict=False)
-
+        
         # Done!
         return model
 
