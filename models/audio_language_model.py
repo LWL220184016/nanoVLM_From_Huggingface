@@ -164,6 +164,8 @@ class AudioLanguageModel(nn.Module):
             # --- 修改結束 ---
 
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
+
+            # 不知道爲什麽，colab 裏運行到這一行運行會報錯，換成 .view 會再報錯，再換回 .resize 就能正常運行
             loss = loss_fct(logits.resize(-1, logits.size(-1)), final_targets.resize(-1))
             return logits, loss
         
