@@ -1,6 +1,11 @@
 import json
 import os
 import tempfile
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 from dataclasses import asdict
 from typing import Optional
 
@@ -10,10 +15,8 @@ from models.language_model import LanguageModel
 from models.modality_projector import create_modality_projector
 from models.config import ALMConfig
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from safetensors.torch import load_model, save_model
+from debug_func import debug_print_tensor_stats
 
 class AudioLanguageModel(nn.Module):
     def __init__(self, cfg: ALMConfig, load_backbone=True, tokenizer=None, device=None):
@@ -54,9 +57,11 @@ class AudioLanguageModel(nn.Module):
             audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
         
         audio_embeds = self.MP(audio_features)  # [B, num_audio_patches, lm_hidden_dim]
-
+        debug_print_tensor_stats("Debug(AudioLanguageModel): Audio Embeds = \n", audio_embeds) # <--- 調試點 1
         # 2. 獲取文本嵌入
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, seq_len, lm_hidden_dim]
+        debug_print_tensor_stats("Debug(AudioLanguageModel): Text Embeds = \n", text_embeds) # <--- 調試點 1
+
 
         # 3. 將音訊嵌入插入到 <AUDIO> token 的位置
         final_embeds = []
@@ -105,10 +110,12 @@ class AudioLanguageModel(nn.Module):
         inputs_embeds, combined_attention_mask = self._prepare_decoder_inputs(
             input_ids, audio, attention_mask
         )
+        debug_print_tensor_stats("Debug(AudioLanguageModel): Input Embeds = \n", inputs_embeds) # <--- 調試點 1
 
         # 通过语言模型
         decoder_output_embeds = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
-        
+        debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
+
         try:
             logits = self.decoder.head(decoder_output_embeds[0])
         except (TypeError, IndexError):
@@ -165,8 +172,7 @@ class AudioLanguageModel(nn.Module):
 
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
 
-            # 不知道爲什麽，colab 裏運行到這一行運行會報錯，換成 .view 會再報錯，再換回 .resize 就能正常運行
-            loss = loss_fct(logits.resize(-1, logits.size(-1)), final_targets.resize(-1))
+            loss = loss_fct(logits.reshape(-1, logits.size(-1)), final_targets.reshape(-1))
             return logits, loss
         
         return logits

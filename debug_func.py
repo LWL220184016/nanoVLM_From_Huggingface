@@ -129,3 +129,10 @@ def debug_contrastive_learning(model, batch, device):
         print(f"Similarity matrix diagonal mean: {torch.diag(similarity_matrix).mean():.4f}")
         print(f"Similarity matrix off-diagonal mean: {similarity_matrix.fill_diagonal_(0).mean():.4f}")
 
+def debug_print_tensor_stats(name, tensor):
+    """一個輔助函數，用於打印張量的統計信息"""
+    if torch.isnan(tensor).any():
+        print(f"!!! {name} contains NaN.")
+    if torch.isinf(tensor).any():
+        print(f"!!! {name} contains Inf.")
+    print(f"Stats for {name}: shape={tensor.shape}, dtype={tensor.dtype}, min={tensor.min():.4f}, max={tensor.max():.4f}, mean={tensor.mean():.4f}")
