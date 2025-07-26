@@ -39,6 +39,9 @@ class AudioLanguageModel(nn.Module):
         self.audio_token_id = self.tokenizer.convert_tokens_to_ids('<AUDIO>')
 
         self.MP = create_modality_projector(cfg)
+        # 步驟 1: 初始化 LayerNorm 層。
+        # 它會對 lm_hidden_dim 維度進行歸一化。
+        self.audio_embed_layernorm = nn.LayerNorm(cfg.lm_hidden_dim)
         self.load_backbone = load_backbone
         self.device = device
 
@@ -57,7 +60,12 @@ class AudioLanguageModel(nn.Module):
             audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
         
         audio_embeds = self.MP(audio_features)  # [B, num_audio_patches, lm_hidden_dim]
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Audio Embeds = \n", audio_embeds) # <--- 調試點 1
+        
+        # 步驟 2: 在拼接前，將 LayerNorm 應用於音頻嵌入。
+        # 這會穩定 audio_embeds 的數值分佈。
+        audio_embeds = self.audio_embed_layernorm(audio_embeds)
+
+        debug_print_tensor_stats("Debug(AudioLanguageModel): Audio Embeds = \n", audio_embeds)
         # 2. 獲取文本嵌入
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, seq_len, lm_hidden_dim]
         debug_print_tensor_stats("Debug(AudioLanguageModel): Text Embeds = \n", text_embeds) # <--- 調試點 1
