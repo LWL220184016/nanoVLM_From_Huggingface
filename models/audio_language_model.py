@@ -114,7 +114,7 @@ class AudioLanguageModel(nn.Module):
 
         # 通过语言模型
         decoder_output_embeds = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
+        debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds[0]) # <--- 調試點 1
 
         try:
             logits = self.decoder.head(decoder_output_embeds[0])
