@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 # https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/modeling_llama.py#L69
 class RMSNorm(nn.Module):
@@ -394,6 +395,8 @@ class LanguageModel(nn.Module):
         self.lm_use_tokens = cfg.lm_use_tokens
         self.lm_tie_weights = cfg.lm_tie_weights
 
+        self.use_gradient_checkpointing = cfg.lm_gradient_checkpointing
+
         self.token_embedding = nn.Embedding(cfg.lm_vocab_size, cfg.lm_hidden_dim)
         self.rotary_embd = RotaryEmbedding(cfg)
         self.blocks = nn.ModuleList([
@@ -506,7 +509,16 @@ class LanguageModel(nn.Module):
             kv_cache = [None] * len(self.blocks)
 
         for i, block in enumerate(self.blocks):
-            x, kv_cache[i] = block(x, cos, sin, attention_mask, kv_cache[i])
+            # <--- 3. 核心修改：應用梯度檢查點 ---
+            if self.use_gradient_checkpointing and self.training:
+                # 在訓練時，使用 checkpoint 包裹 block 的 forward 計算
+                # 這會阻止存儲中間激活值，從而在反向傳播時重新計算它們
+                # `use_reentrant=False` 是推薦的現代用法，效率更高
+                # `block` 的輸出是 (tensor, dict)，checkpoint 會正確地返回它們
+                x, kv_cache[i] = checkpoint(block, x, cos, sin, attention_mask, kv_cache[i], use_reentrant=False)
+            else:
+                # 在評估模式或禁用時，正常調用
+                x, kv_cache[i] = block(x, cos, sin, attention_mask, kv_cache[i])
 
         x = self.norm(x)
 
