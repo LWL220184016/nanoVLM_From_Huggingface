@@ -9,3 +9,6 @@ Please ensure your data collator correctly prepares the labels to match the sequ
 
 Debug(-----------: logit.shape = torch.Size([4, 1572, 49153])
 Debug(-----------: target.shape = torch.Size([4, 1572])
+
+collator 中只把 input_ids 和 labels 填充到一樣長, 但實際上要輸入給模型的還有音頻數據, 
+或許是這個原因導致 targets 和 logits 不匹配
