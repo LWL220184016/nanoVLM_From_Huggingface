@@ -57,11 +57,9 @@ class AudioLanguageModel(nn.Module):
             audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
         
         audio_embeds = self.MP(audio_features)  # [B, num_audio_patches, lm_hidden_dim]
-        print("")
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Audio Embeds = \n", audio_embeds) # <--- 調試點 1
+        debug_print_tensor_stats("\nDebug(AudioLanguageModel): Audio Embeds = \n", audio_embeds) # <--- 調試點 1
         # 2. 獲取文本嵌入
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, seq_len, lm_hidden_dim]
-        print("")
         debug_print_tensor_stats("Debug(AudioLanguageModel): Text Embeds = \n", text_embeds) # <--- 調試點 1
 
 
@@ -115,28 +113,77 @@ class AudioLanguageModel(nn.Module):
         debug_print_tensor_stats("Debug(AudioLanguageModel): Input Embeds = \n", inputs_embeds) # <--- 調試點 1
 
         # 通过语言模型
-        decoder_output_embeds, _ = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
+        decoder_output_embeds = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
+        debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds[0]) # <--- 調試點 1
 
-        logits = self.decoder.head(decoder_output_embeds)
+        try:
+            logits = self.decoder.head(decoder_output_embeds[0])
+        except (TypeError, IndexError):
+            logits = self.decoder.head(decoder_output_embeds[1])
 
+        print(f"Debug(AudioLanguageModel.forward)1: logit.shape = {logits.shape}")
+        print(f"Debug(AudioLanguageModel.forward)1: target.shape = {targets.shape}")
         if targets is not None:
-            # --- 核心修改：刪除所有手動對齊 targets 的邏輯 ---
-            # 我們假設從 dataloader 傳來的 targets 已經是正確的形狀。
-            # 它的長度應該已經匹配 `logits` 的序列長度。
+            # --- 核心修改：在計算損失前，對齊 targets 的維度 ---
+            # 由於我們在 _prepare_decoder_inputs 中替換了 <AUDIO> token，
+            # logits 的序列長度變長了。我們需要對 targets 進行同樣的操作。
+
+            batch_size = inputs_embeds.shape[0]
+            aligned_targets = []
+            for i in range(batch_size):
+                try:
+                    # 找到原始 input_ids 中的 <AUDIO> token 位置
+                    audio_token_idx = (input_ids[i] == self.audio_token_id).nonzero(as_tuple=True)[0][0]
+                    
+                    # 獲取音訊嵌入的實際長度
+                    num_audio_patches = self.cfg.audio_patches
+                    
+                    # 創建用於填充的 -100 標籤
+                    audio_padding = torch.full((num_audio_patches,), -100, dtype=targets.dtype, device=self.device)
+                    
+                    # 拼接：<AUDIO>前的標籤 + 音訊填充 + <AUDIO>後的標籤
+                    # 注意：我們從 targets 中移除了 <AUDIO> token 對應的那個標籤
+                    current_aligned_target = torch.cat([
+                        targets[i, :audio_token_idx],
+                        audio_padding,
+                        targets[i, audio_token_idx + 1:]
+                    ], dim=0)
+                    aligned_targets.append(current_aligned_target)
+
+                except IndexError:
+                    # 如果某個樣本沒有 <AUDIO> token，這是一個數據問題，但為了穩定，我們先跳過它
+                    # 理想情況下，這裡應該報錯或有更複雜的處理
+                    aligned_targets.append(targets[i])
+
+            # 將對齊後的 targets 填充到與 logits 相同的長度
+            # logits 的長度由 inputs_embeds 決定
+            final_targets = torch.nn.utils.rnn.pad_sequence(
+                aligned_targets, 
+                batch_first=True, 
+                padding_value=-100
+            )
             
-            # 確保維度匹配，如果不匹配則報錯，以便在數據處理階段修復
-            if logits.shape[1] != targets.shape[1]:
-                raise ValueError(
-                    f"Shape mismatch between logits ({logits.shape}) and targets ({targets.shape}). "
-                    "Please ensure your data collator correctly prepares the labels "
-                    "to match the sequence length after inserting audio patches."
-                )
+            # 確保填充後的長度與 logits 完全一致
+            
+            print(f"Debug(AudioLanguageModel.forward)2: logit.shape = {logits.shape}")
+            print(f"Debug(AudioLanguageModel.forward)2: target.shape = {final_targets.shape}")
+            if final_targets.shape[1] < logits.shape[1]:
+                pad_len = logits.shape[1] - final_targets.shape[1]
+                final_targets = F.pad(final_targets, (0, pad_len), 'constant', -100)
+            elif final_targets.shape[1] > logits.shape[1]:
+                final_targets = final_targets[:, :logits.shape[1]]
+
+            # --- 修改結束 ---
 
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-            loss = loss_fct(logits.view(-1, logits.size(-1)), targets.view(-1))
+
+            loss = loss_fct(logits.reshape(-1, logits.size(-1)), final_targets.reshape(-1))
+            
+            print(f"Debug(AudioLanguageModel.forward)3: logit.shape = {logits.shape}")
+            print(f"Debug(AudioLanguageModel.forward)3: target.shape = {final_targets.shape}")
+            
             return logits, loss
-        
+
         return logits
 
     # 在訓練過程中添加音頻-文本對齊驗證

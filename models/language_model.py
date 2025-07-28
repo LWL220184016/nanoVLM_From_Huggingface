@@ -395,7 +395,7 @@ class LanguageModel(nn.Module):
         self.lm_use_tokens = cfg.lm_use_tokens
         self.lm_tie_weights = cfg.lm_tie_weights
 
-        self.use_gradient_checkpointing = cfg.lm_gradient_checkpointing
+        self.use_gradient_checkpointing = cfg.use_gradient_checkpointing
 
         self.token_embedding = nn.Embedding(cfg.lm_vocab_size, cfg.lm_hidden_dim)
         self.rotary_embd = RotaryEmbedding(cfg)

@@ -24,7 +24,7 @@ class ALMConfig:
     audio_patches: int = 1500 # 音频patch数量
 
     unfreeze_audio_encoder_when_training: bool = False  # 是否在训练时解冻音频编码器
-
+    use_gradient_checkpointing: bool = True
     # ========== 语言模型配置选项 ==========
     # 选项1: SmolLM2-135M (当前使用，较小)
     # lm_hidden_dim: int = 576

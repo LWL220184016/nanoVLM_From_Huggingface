@@ -1,0 +1,11 @@
+新版本會出這個錯誤, 要 logits 是 torch.Size([4, 1572, 49153] 和 target 是 torch.Size([4, 1572]) or 
+                  要 logits 是 torch.Size([4, 1548, 49153] 和 target 是 torch.Size([4, 1548]) 才行
+
+ValueError: Shape mismatch between logits (torch.Size([4, 1572, 49153])) and targets (torch.Size([4, 1548])). 
+Please ensure your data collator correctly prepares the labels to match the sequence length after inserting audio patches.
+
+
+舊版有填充和截斷, 這個形狀是可以正常運作的, 但也應該因為破壞了訊息因此 Loss 會變成 NaN
+
+Debug(-----------: logit.shape = torch.Size([4, 1572, 49153])
+Debug(-----------: target.shape = torch.Size([4, 1572])
