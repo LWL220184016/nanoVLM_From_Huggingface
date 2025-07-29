@@ -121,18 +121,14 @@ class AudioLanguageModel(nn.Module):
         logits = self.decoder.head(decoder_output_embeds)
 
         if targets is not None:
-            # --- 核心修改：刪除所有手動對齊 targets 的邏輯 ---
-            # 我們假設從 dataloader 傳來的 targets 已經是正確的形狀。
-            # 它的長度應該已經匹配 `logits` 的序列長度。
-            
-            # 確保維度匹配，如果不匹配則報錯，以便在數據處理階段修復
             if logits.shape[1] != targets.shape[1]:
-                raise ValueError(
-                    f"Shape mismatch between logits ({logits.shape}) and targets ({targets.shape}). "
-                    "Please ensure your data collator correctly prepares the labels "
-                    "to match the sequence length after inserting audio patches."
-                )
+                padding_needed = logits.shape[1] - targets.shape[1]
+                padding_value = -100
 
+                # 使用 F.pad 進行填充
+                # pad 參數的格式為 (pad_left, pad_right, pad_top, pad_bottom, ...)
+                # 對於 2D tensor (batch_size, sequence_length)，我們只想在 sequence_length (第二維) 的右側填充
+                targets = F.pad(targets, (0, padding_needed), 'constant', padding_value)
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
             loss = loss_fct(logits.view(-1, logits.size(-1)), targets.view(-1))
             return logits, loss

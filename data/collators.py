@@ -34,11 +34,17 @@ class AlignmentCollator(object):
             "attention_mask": encoded_texts["attention_mask"]
         }
 
+# 需要改的: 
+#   1. 把使用者輸入和音訊轉錄分開
+#   2. 在音訊模型那裡新開一個函數用於對齊
+#   3. 新函數同時接受 input_ids 和 labels, 函數中 input_ids 先加上 
+#      audio embeds , 然後加上 labels, 最後 input_ids, labels 對齊
+#      度, labels 前面加 -100
+
 class AudioQACollator(object):
-    def __init__(self, tokenizer, max_text_length, audio_patches):
+    def __init__(self, tokenizer, max_text_length):
         self.tokenizer = tokenizer
         self.max_text_length = max_text_length
-        self.audio_patches = audio_patches # 音訊嵌入的長度
         if self.tokenizer.chat_template is None:
             raise ValueError("The tokenizer must have a chat_template.")
         self.audio_token_id = self.tokenizer.convert_tokens_to_ids('<AUDIO>')
@@ -67,43 +73,13 @@ class AudioQACollator(object):
             )
 
             # 2. 找到答案的起始位置
-            prompt_messages = messages[:-1]
-            prompt_ids = self.tokenizer.apply_chat_template(
-                prompt_messages, tokenize=True, add_generation_prompt=True
+            assistant_messages = messages[1:2]
+            assistant_ids = self.tokenizer.apply_chat_template(
+                assistant_messages, tokenize=True, add_generation_prompt=True
             )
-            answer_start_index = len(prompt_ids)
 
-            # 3. 找到 <AUDIO> token 的位置
-            try:
-                audio_token_idx = full_input_ids.index(self.audio_token_id)
-            except ValueError:
-                raise ValueError("'<AUDIO>' token not found in the tokenized prompt. Check your chat template.")
-
-            # 4. *** 核心修改：同時修改 input_ids 和 labels ***
-            
-            # 4.1 創建初始 labels，答案部分為 token ID，其餘為 -100
-            labels = [-100] * len(full_input_ids)
-            labels[answer_start_index:] = full_input_ids[answer_start_index:]
-
-            # 4.2 準備要插入的內容
-            # 對於 input_ids，我們插入 audio_token_id 來佔位
-            # 對於 labels，我們插入 -100 來忽略損失
-            input_id_padding = [self.audio_token_id] * self.audio_patches
-            label_padding = [-100] * self.audio_patches
-
-            # 4.3 執行替換操作，確保 input_ids 和 labels 長度同步變化
-            final_input_ids = full_input_ids[:audio_token_idx] + input_id_padding + full_input_ids[audio_token_idx + 1:]
-            final_labels = labels[:audio_token_idx] + label_padding + labels[audio_token_idx + 1:]
-            
-            # 4.4 截斷到最大長度
-            # 注意：最大長度現在應該考慮到音訊 patch 的增加
-            # 我們在拼接後、填充前進行截斷
-            max_len = self.max_text_length + self.audio_patches - 1 # -1 是因為 <AUDIO> 被替換了
-            final_input_ids = final_input_ids[:max_len]
-            final_labels = final_labels[:max_len]
-
-            all_final_input_ids.append(torch.tensor(final_input_ids))
-            all_final_labels.append(torch.tensor(final_labels))
+            all_final_input_ids.append(torch.tensor(full_input_ids))
+            all_final_labels.append(torch.tensor(assistant_ids))
 
         # 5. 填充整個批次，使其長度一致
         input_ids = torch.nn.utils.rnn.pad_sequence(
@@ -127,4 +103,3 @@ class AudioQACollator(object):
             "attention_mask": attention_mask,
             "labels": labels
         }
-    
