@@ -1,14 +1,23 @@
-新版本會出這個錯誤, 要 logits 是 torch.Size([4, 1572, 49153] 和 target 是 torch.Size([4, 1572]) or 
-                  要 logits 是 torch.Size([4, 1548, 49153] 和 target 是 torch.Size([4, 1548]) 才行
+Problem 2: 
+    解決第一個正向傳播的 Loss 是 NaN 之後, 下一個問題是在 optimizer.step() 中顯存爆滿 
 
-ValueError: Shape mismatch between logits (torch.Size([4, 1572, 49153])) and targets (torch.Size([4, 1548])). 
-Please ensure your data collator correctly prepares the labels to match the sequence length after inserting audio patches.
+Problem 1(Fixed): 
+    新版本會出這個錯誤, 要 logits 是 torch.Size([4, 1572, 49153] 和 target 是 torch.Size([4, 1572]) or 
+                    要 logits 是 torch.Size([4, 1548, 49153] 和 target 是 torch.Size([4, 1548]) 才行
+
+    ValueError: Shape mismatch between logits (torch.Size([4, 1572, 49153])) and targets (torch.Size([4, 1548])). 
+    Please ensure your data collator correctly prepares the labels to match the sequence length after inserting audio patches.
 
 
-舊版有填充和截斷, 這個形狀是可以正常運作的, 但也應該因為破壞了訊息因此 Loss 會變成 NaN
+    舊版有填充和截斷, 這個形狀是可以正常運作的, 但也應該因為破壞了訊息因此 Loss 會變成 NaN
 
-Debug(-----------: logit.shape = torch.Size([4, 1572, 49153])
-Debug(-----------: target.shape = torch.Size([4, 1572])
+    Debug(-----------: logit.shape = torch.Size([4, 1572, 49153])
+    Debug(-----------: target.shape = torch.Size([4, 1572])
 
-collator 中只把 input_ids 和 labels 填充到一樣長, 但實際上要輸入給模型的還有音頻數據, 
-或許是這個原因導致 targets 和 logits 不匹配
+    collator 中只把 input_ids 和 labels 填充到一樣長, 但實際上要輸入給模型的還有音頻數據, 
+    或許是這個原因導致 targets 和 logits 不匹配
+
+    # 解決方法:
+        在 collator 中分詞器完成分詞後不做任何填充以及截斷, 因為這個時候不知道 num_audio_patches 的值, 
+        等在 AudioLanguageModel.forward 中把音訊的嵌入向量插入到文字項梁之後, 然後再計算 logits 和 
+        targets 的差距, 接著在 targets 的前端填充 -100
