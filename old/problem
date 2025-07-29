@@ -1,5 +1,21 @@
 Problem 2: 
     解決第一個正向傳播的 Loss 是 NaN 之後, 下一個問題是在 optimizer.step() 中顯存爆滿 
+    序列長度應該不是問題，而且我認爲和之前能夠訓練的時候的最大區別在於我把音頻嵌入向量插入到文字向量之間,
+    之前是直接吧向量拼接在所有文字向量的前面，我認爲序列長度沒有變化，但現在即便吧 batch_size 設置為 1，
+    使用 float16 也會顯存爆滿。
+
+    之前雖然訓練循環能正常運行，但實際上訓練後的模型輸出和輸入内容完全不匹配
+
+    嘗試解決：暫停使用 torch.compile，嘗試啓用 scaler，如果還是不行就嘗試修改 language_model.py 中的梯度檢查點實現，使其與 torch.compile 兼容
+
+    Stats for Debug(AudioLanguageModel): Audio Embeds = 
+    : shape=torch.Size([1, 25, 2048]), dtype=torch.float32, min=-4.3295, max=7.8702, mean=-0.0000
+    Stats for Debug(AudioLanguageModel): Text Embeds = 
+    : shape=torch.Size([1, 24, 2048]), dtype=torch.float32, min=-1.1797, max=0.9023, mean=-0.0002
+    Stats for Debug(AudioLanguageModel): Input Embeds = 
+    : shape=torch.Size([1, 48, 2048]), dtype=torch.float32, min=-4.3295, max=7.8702, mean=-0.0001
+    Stats for Debug(AudioLanguageModel): Decoder Output Embeds = 
+    : shape=torch.Size([1, 48, 2048]), dtype=torch.float32, min=-54.5876, max=48.1277, mean=0.0124
 
 Problem 1(Fixed): 
     新版本會出這個錯誤, 要 logits 是 torch.Size([4, 1572, 49153] 和 target 是 torch.Size([4, 1572]) or 
