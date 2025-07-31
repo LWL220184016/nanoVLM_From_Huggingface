@@ -223,8 +223,7 @@ class AudioLanguageModel(nn.Module):
         
         for _ in range(max_new_tokens):
             # 注意：這裡傳入的是已經準備好的 embeds
-            outputs = self.decoder.decoder(inputs_embeds=current_sequence_embeds, attention_mask=current_attention_mask)
-            decoder_output_embeds = outputs.last_hidden_state
+            decoder_output_embeds, _ = self.decoder(x=current_sequence_embeds, attention_mask=current_attention_mask)
             
             last_token_embed_from_decoder = decoder_output_embeds[:, -1, :]
             last_token_logits = self.decoder.head(last_token_embed_from_decoder)
