@@ -34,12 +34,6 @@ class AlignmentCollator(object):
             "attention_mask": encoded_texts["attention_mask"]
         }
 
-# 需要改的: 
-#   1. 把使用者輸入和音訊轉錄分開
-#   2. 在音訊模型那裡新開一個函數用於對齊
-#   3. 新函數同時接受 input_ids 和 labels, 函數中 input_ids 先加上 
-#      audio embeds , 然後加上 labels, 最後 input_ids, labels 對齊
-#      度, labels 前面加 -100
 
 class AudioQACollator(object):
     def __init__(self, tokenizer, max_text_length):

@@ -1,5 +1,6 @@
 import re
 import torch
+import torch.nn as nn
 
 # Used to check our models performance on multiple choice tasks. This can also be done in a more involved way with e.g. LLM-as-a-judge
 def check_multiple_choice_with_regex(model_outputs, correct_answers):
@@ -48,3 +49,35 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=1.0, filter_value=-float('Inf')
         logits = logits.masked_fill(indices_to_remove, filter_value)
 
     return logits
+
+
+def resize_embedding_preserve_weights(emb: nn.Embedding, new_num_embeddings: int, init_std: float = 0.02) -> nn.Embedding:
+    old_weight = emb.weight.data
+    old_n, dim = old_weight.shape
+    if new_num_embeddings == old_n:
+        return emb
+    new_emb = nn.Embedding(new_num_embeddings, dim, device=old_weight.device, dtype=old_weight.dtype)
+    new_emb.weight.data.normal_(mean=0.0, std=init_std)
+    num_to_copy = min(old_n, new_num_embeddings)
+    new_emb.weight.data[:num_to_copy] = old_weight[:num_to_copy]
+    return new_emb
+
+
+def resize_linear_out_preserve_weights(head: nn.Linear, new_out_features: int, init_std: float = 0.02) -> nn.Linear:
+    old_w = head.weight.data
+    in_features = head.in_features
+    if new_out_features == old_w.shape[0]:
+        return head
+    new_head = nn.Linear(in_features, new_out_features, bias=False, device=old_w.device, dtype=old_w.dtype)
+    new_head.weight.data.normal_(mean=0.0, std=init_std)
+    num_to_copy = min(old_w.shape[0], new_out_features)
+    new_head.weight.data[:num_to_copy] = old_w[:num_to_copy]
+    return new_head
+
+
+def tie_lm_head_to_embeddings(head: nn.Linear, embedding: nn.Embedding):
+    assert head.out_features == embedding.num_embeddings
+    assert head.in_features == embedding.embedding_dim
+    head.weight = embedding.weight
+    return head
+

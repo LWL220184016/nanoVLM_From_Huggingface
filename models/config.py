@@ -106,7 +106,7 @@ class TrainConfig:
     mp_pretrain_lr: float = 5e-6  # 预训练使用较高学习率
 
     lr_mp: float = 5e-6
-    lr_backbones: float = 1e-6
+    lr_backbones: float = 1e-8
     val_ratio: float = 0.2
     compile: bool = False
     data_cutoff_idx: int = 1024 # Let's only use a small subset of the data at first, otherwise it takes very long to see anything :D
