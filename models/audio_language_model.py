@@ -44,95 +44,109 @@ class AudioLanguageModel(nn.Module):
 
     def _prepare_decoder_inputs(self, input_ids, audio, attention_mask=None):
         """
-        一個內部輔助函數，封裝了從原始輸入到解碼器輸入嵌入的完整過程。
-        這是 forward 和 generate 之間的共享邏輯。
+        準備解碼器輸入。回傳：
+        - inputs_embeds, combined_attention_mask
+        - audio_positions: 每筆樣本 <AUDIO> 的索引（在原始 input_ids 中）
+        - audio_lens: 每筆樣本展開後音訊片段數 A
         """
         batch_size = input_ids.shape[0]
 
-        # 1. 音頻編碼和投影
-        # 注意：在 generate 中，audio_encoder 可能不需要梯度
         is_training = self.training
         with torch.set_grad_enabled(is_training and self.cfg.unfreeze_audio_encoder_when_training):
             input_features = audio.to(self.device)
             audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
-        
-        audio_embeds = self.MP(audio_features)  # [B, num_audio_patches, lm_hidden_dim]
-        print("")
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Audio Embeds = \n", audio_embeds) # <--- 調試點 1
-        # 2. 獲取文本嵌入
-        text_embeds = self.decoder.token_embedding(input_ids)  # [B, seq_len, lm_hidden_dim]
-        print("")
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Text Embeds = \n", text_embeds) # <--- 調試點 1
 
+        audio_embeds = self.MP(audio_features)  # [B, A, D]
+        text_embeds = self.decoder.token_embedding(input_ids)  # [B, T, D]
 
-        # 3. 將音訊嵌入插入到 <AUDIO> token 的位置
         final_embeds = []
         final_attention_mask = []
+        audio_positions = []
+        audio_lens = []
+
         for i in range(batch_size):
             audio_token_idx = (input_ids[i] == self.audio_token_id).nonzero(as_tuple=True)[0]
-            
             if len(audio_token_idx) == 0:
-                # 在訓練和生成時都應報錯，因為這是數據準備階段的問題
                 raise ValueError(f"<AUDIO> token not found in sample {i}. Check your data collator.")
+            pos = int(audio_token_idx[0].item())
+            A = int(audio_embeds[i].shape[0])
 
-            audio_token_idx = audio_token_idx[0]
+            audio_positions.append(pos)
+            audio_lens.append(A)
 
-            # 拼接嵌入
             current_embeds = torch.cat([
-                text_embeds[i, :audio_token_idx],
+                text_embeds[i, :pos],
                 audio_embeds[i],
-                text_embeds[i, audio_token_idx + 1:]
+                text_embeds[i, pos + 1:]
             ], dim=0)
             final_embeds.append(current_embeds)
 
-            # 創建對應的注意力掩碼
             if attention_mask is not None:
-                audio_attn = torch.ones(audio_embeds.shape[1], device=self.device, dtype=attention_mask.dtype)
+                audio_attn = torch.ones(A, device=self.device, dtype=attention_mask.dtype)
                 current_mask = torch.cat([
-                    attention_mask[i, :audio_token_idx],
+                    attention_mask[i, :pos],
                     audio_attn,
-                    attention_mask[i, audio_token_idx + 1:]
+                    attention_mask[i, pos + 1:]
                 ], dim=0)
                 final_attention_mask.append(current_mask)
 
-        # 4. 將 batch 中的樣本填充到相同的長度
         inputs_embeds = torch.nn.utils.rnn.pad_sequence(final_embeds, batch_first=True)
-        
+
         combined_attention_mask = None
         if attention_mask is not None:
             combined_attention_mask = torch.nn.utils.rnn.pad_sequence(final_attention_mask, batch_first=True)
-        
-        return inputs_embeds, combined_attention_mask
 
-    def forward(self, input_ids, audio, attention_mask=None, targets=None):
+        audio_positions = torch.tensor(audio_positions, device=inputs_embeds.device, dtype=torch.long)
+        audio_lens = torch.tensor(audio_lens, device=inputs_embeds.device, dtype=torch.long)
+        return inputs_embeds, combined_attention_mask, audio_positions, audio_lens
+
+    def forward(self, input_ids, audio, attention_mask=None, labels=None):
         """
-        訓練時調用
+        訓練時調用：
+        - labels 只應該為 assistant 回覆可學，其餘（系統/使用者/pad）為 -100（由 collator 負責）
+        - 這裡在 <AUDIO> 位置插入 A 個 -100，讓 labels 與展開後序列等長
+        - 使用 next-token shift 計算損失
         """
-        # 調用共享函數來準備輸入
-        inputs_embeds, combined_attention_mask = self._prepare_decoder_inputs(
+        inputs_embeds, combined_attention_mask, audio_positions, audio_lens = self._prepare_decoder_inputs(
             input_ids, audio, attention_mask
         )
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Input Embeds = \n", inputs_embeds) # <--- 調試點 1
 
-        # 通过语言模型
         decoder_output_embeds, _ = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
-        debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
+        logits = self.decoder.head(decoder_output_embeds)  # [B, L, V]
 
-        logits = self.decoder.head(decoder_output_embeds)
+        if labels is not None:
+            B = input_ids.size(0)
+            expanded_labels = []
+            for i in range(B):
+                li = labels[i]                 # 與原始 input_ids 同長
+                pos = int(audio_positions[i])
+                A = int(audio_lens[i])
 
-        if targets is not None:
-            if logits.shape[1] != targets.shape[1]:
-                padding_needed = logits.shape[1] - targets.shape[1]
-                padding_value = -100
+                left = li[:pos]
+                right = li[pos + 1:]           # 去掉 <AUDIO>
+                audio_ign = torch.full((A,), -100, dtype=li.dtype, device=li.device)
+                li_expanded = torch.cat([left, audio_ign, right], dim=0)
+                expanded_labels.append(li_expanded)
 
-                # 使用 F.pad 進行填充
-                # pad 參數的格式為 (pad_left, pad_right, pad_top, pad_bottom, ...)
-                # 對於 2D tensor (batch_size, sequence_length)，我們只想在 sequence_length (第二維) 的右側填充
-                targets = F.pad(targets, (0, padding_needed), 'constant', padding_value)
-            loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-            loss = loss_fct(logits.view(-1, logits.size(-1)), targets.view(-1))
+            combined_labels = torch.nn.utils.rnn.pad_sequence(expanded_labels, batch_first=True, padding_value=-100)
+
+            # 與 logits 對齊（通常已對齊；保底處理）
+            if combined_labels.size(1) < logits.size(1):
+                pad = logits.size(1) - combined_labels.size(1)
+                combined_labels = F.pad(combined_labels, (0, pad), value=-100)
+            elif combined_labels.size(1) > logits.size(1):
+                combined_labels = combined_labels[:, :logits.size(1)]
+
+            # next-token shift
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_labels = combined_labels[:, 1:].contiguous()
+            loss = F.cross_entropy(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1),
+                ignore_index=-100
+            )
             return logits, loss
-        
+
         return logits
 
     # 在訓練過程中添加音頻-文本對齊驗證
