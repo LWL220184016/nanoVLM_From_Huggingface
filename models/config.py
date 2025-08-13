@@ -93,7 +93,6 @@ class ALMConfig:
     lm_max_length: int = 128 - mp_target_length  # 總長度 - 音頻token長度
 
     # ALM特定配置
-    alm_load_backbone_weights: bool = True
     alm_checkpoint_path: str = 'checkpoints'
     alm_name: str = 'nanoALM-1.7B'  # 更新模型名称
     mp_hidden_multiplier = 2

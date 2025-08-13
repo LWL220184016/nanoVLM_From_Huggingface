@@ -585,7 +585,7 @@ class LanguageModel(nn.Module):
 
     # Load the model from a pretrained HuggingFace model (we don't want to have to train the Language Backbone from scratch)
     @classmethod
-    def from_pretrained(cls, cfg):
+    def from_huggingface_pretrained(cls, cfg):
         from transformers import AutoConfig
         from huggingface_hub import hf_hub_download
         import safetensors

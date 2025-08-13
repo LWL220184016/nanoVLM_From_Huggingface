@@ -16,30 +16,27 @@ from models.modality_projector import create_modality_projector
 from models.config import ALMConfig
 
 from safetensors.torch import load_model, save_model
-from debug_func import debug_print_tensor_stats
+from debug.debug_func import debug_print_tensor_stats
 
 class AudioLanguageModel(nn.Module):
-    def __init__(self, cfg: ALMConfig, load_backbone=True, tokenizer=None, device=None):
+    def __init__(self, cfg: ALMConfig, load_from_HF=True, tokenizer=None, device=None, print_debug=False):
         super().__init__()
         self.cfg = cfg
         self.tokenizer = tokenizer
+        self.print_debug = print_debug
 
-        if load_backbone:
+        self.audio_encoder = AudioTransformer(cfg, device=device, load_from_HF=load_from_HF)
+        if load_from_HF:
             print("Loading from backbone weights")
-            self.audio_encoder = AudioTransformer(cfg, device=device)
-            self.decoder = LanguageModel.from_pretrained(cfg)
+            self.decoder = LanguageModel.from_huggingface_pretrained(cfg)
         else:
-            self.audio_encoder = AudioTransformer(cfg, device=device)
             self.decoder = LanguageModel(cfg)
-        
-        # 添加特殊 token 並調整嵌入層
-        special_tokens_dict = {'additional_special_tokens': ['<AUDIO>']}
-        self.tokenizer.add_special_tokens(special_tokens_dict)
+                
         self.decoder.resize_token_embeddings(len(self.tokenizer))
+        self.MP = create_modality_projector(cfg)
         self.audio_token_id = self.tokenizer.convert_tokens_to_ids('<AUDIO>')
 
-        self.MP = create_modality_projector(cfg)
-        self.load_backbone = load_backbone
+        self.load_from_HF = load_from_HF
         self.device = device
 
     def _prepare_decoder_inputs(self, input_ids, audio, attention_mask=None):
@@ -58,6 +55,10 @@ class AudioLanguageModel(nn.Module):
 
         audio_embeds = self.MP(audio_features)  # [B, A, D]
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, T, D]
+
+        if self.print_debug:
+            debug_print_tensor_stats("\nDebug(AudioLanguageModel): Audio Embeds = \n", audio_embeds) # <--- 調試點 1
+            debug_print_tensor_stats("Debug(AudioLanguageModel): Text Embeds = \n", text_embeds) # <--- 調試點 1
 
         final_embeds = []
         final_attention_mask = []
@@ -112,6 +113,9 @@ class AudioLanguageModel(nn.Module):
         )
 
         decoder_output_embeds, _ = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
+        
+        
+        
         logits = self.decoder.head(decoder_output_embeds)  # [B, L, V]
 
         if labels is not None:
@@ -127,6 +131,19 @@ class AudioLanguageModel(nn.Module):
                 audio_ign = torch.full((A,), -100, dtype=li.dtype, device=li.device)
                 li_expanded = torch.cat([left, audio_ign, right], dim=0)
                 expanded_labels.append(li_expanded)
+                
+                # Debug
+                if self.print_debug:
+                    debug_print_tensor_stats("Debug(AudioLanguageModel): Input Embeds = \n", inputs_embeds) # <--- 調試點 1
+                    debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
+                    
+                    print("Debug(AudioLanguageModel): labels: ", li.size(), "li: ", li)  # 調試輸出
+                    print(f"Debug(AudioLanguageModel): <AUDIO> pos: {pos}, A (audio patches): {audio_lens[i].item()}")
+                    print("Debug(AudioLanguageModel): A: ", A)
+                    print("Debug(AudioLanguageModel): left: ", left.size(), "left: ", left)
+                    print("Debug(AudioLanguageModel): right: ", right.size(), "right: ", right)
+                    print("Debug(AudioLanguageModel): audio_ign: ", audio_ign.size(), "audio_ign: ", audio_ign)
+                    print("Debug(AudioLanguageModel): li_expanded: ", li_expanded.size(), "li_expanded: ", li_expanded)
 
             combined_labels = torch.nn.utils.rnn.pad_sequence(expanded_labels, batch_first=True, padding_value=-100)
 
@@ -145,7 +162,9 @@ class AudioLanguageModel(nn.Module):
                 shift_labels.view(-1),
                 ignore_index=-100
             )
+            print("labels: ", shift_labels)
             return logits, loss
+
 
         return logits
 
@@ -305,7 +324,7 @@ class AudioLanguageModel(nn.Module):
             cfg = ALMConfig(**json.load(f))
 
         # Initialize model without loading the backbone
-        model = cls(cfg, load_backbone=False, tokenizer=tokenizer)
+        model = cls(cfg, load_from_HF=False, tokenizer=tokenizer)
 
         # Load safetensors weights
         load_model(model, weights_path, strict=False)

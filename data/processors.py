@@ -6,9 +6,20 @@ from transformers import AutoTokenizer, AutoProcessor
 TOKENIZERS_CACHE = {}
 
 def get_tokenizer(name):
+    # TODO
+    # 完成加載分詞器後保存分詞器, 如果檢查點有分詞器,優先加載檢查點的分詞器
     if name not in TOKENIZERS_CACHE:
         tokenizer = AutoTokenizer.from_pretrained(name, use_fast=True)
-        tokenizer.pad_token = tokenizer.eos_token
+        if tokenizer.pad_token is None:
+            # 常見做法：用 eos 當 pad
+            if tokenizer.eos_token is not None:
+                tokenizer.pad_token = tokenizer.eos_token
+            else:
+                tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
+
+        # 添加特殊 token 並調整嵌入層
+        special_tokens_dict = {'additional_special_tokens': ['<AUDIO>']}
+        tokenizer.add_special_tokens(special_tokens_dict)
         TOKENIZERS_CACHE[name] = tokenizer
     return TOKENIZERS_CACHE[name]
 

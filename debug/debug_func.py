@@ -135,4 +135,4 @@ def debug_print_tensor_stats(name, tensor):
         print(f"!!! {name} contains NaN.")
     if torch.isinf(tensor).any():
         print(f"!!! {name} contains Inf.")
-    print(f"Stats for {name}: shape={tensor.shape}, dtype={tensor.dtype}, min={tensor.min():.4f}, max={tensor.max():.4f}, mean={tensor.mean():.4f}")
+    print(f"{name}: shape={tensor.shape}, dtype={tensor.dtype}, min={tensor.min():.4f}, max={tensor.max():.4f}, mean={tensor.mean():.4f}")

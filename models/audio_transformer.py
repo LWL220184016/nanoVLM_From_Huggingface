@@ -287,14 +287,22 @@ class AudioTransformer_from_NeMo():
     
 class AudioTransformer_from_HF():
     """完整的音频Transformer编码器"""
-    def __init__(self, cfg, device):
+    def __init__(self, cfg, device, load_from_HF):
+        from transformers import AutoConfig, AutoModel
         super().__init__()
         self.cfg = cfg
-        
-        self.audio_encoder = self.from_pretrained(cfg)
         self.device = device
+        
+        if load_from_HF:
+            print(f"Loading audio encoder from Huggingface: {cfg.audio_encoder_name}")
+            self.audio_encoder = AutoModel.from_pretrained(cfg.audio_encoder_name)
+            self.audio_encoder.eval()
+        else:
+            print(f"Initializing empty audio encoder: {cfg.audio_encoder_name}")
+            config = AutoConfig.from_pretrained(cfg.audio_encoder_name)
+            self.audio_encoder = AutoModel.from_config(config)
+
         self.audio_encoder.to(self.device)
-        self.audio_encoder.eval()
         self.datatype = torch.float32
         
 

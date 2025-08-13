@@ -5,6 +5,10 @@ import math
 import torch
 import torch.nn.functional as F
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 from models.config import ALMConfig
 from models.audio_language_model import AudioLanguageModel
 from data.processors import get_audio_processor
@@ -92,7 +96,7 @@ def run():
     tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
 
     # 構建模型（會自動新增 <AUDIO> 並調整詞嵌入）
-    model = AudioLanguageModel(alm_cfg, load_backbone=True, tokenizer=tokenizer, device=device).to(device)
+    model = AudioLanguageModel(alm_cfg, load_from_HF=True, tokenizer=tokenizer, device=device).to(device)
     model.eval()
 
     # 造一條 toy 輸入與對應 labels（labels 僅保留 assistant 段為可學，其餘為 -100）
