@@ -54,7 +54,7 @@ def get_dataloaders(train_cfg, alm_cfg, tokenizer):
     train_size = total_samples - val_size
 
     train_dataset = AudioQADataset(train_ds.select(range(train_size)), tokenizer, audio_processor)
-    aqa_collator = AudioQACollator(tokenizer, alm_cfg.lm_max_length, alm_cfg.audio_patches)
+    aqa_collator = AudioQACollator(tokenizer, alm_cfg.lm_max_length)
     
 
     train_loader = DataLoader(

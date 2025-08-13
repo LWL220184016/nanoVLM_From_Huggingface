@@ -294,12 +294,12 @@ class AudioTransformer_from_HF():
         self.device = device
         
         if load_from_HF:
-            print(f"Loading audio encoder from Huggingface: {cfg.audio_encoder_name}")
-            self.audio_encoder = AutoModel.from_pretrained(cfg.audio_encoder_name)
+            print(f"Loading audio encoder from Huggingface: {cfg.cfg.audio_model_type}")
+            self.audio_encoder = AutoModel.from_pretrained(cfg.cfg.audio_model_type)
             self.audio_encoder.eval()
         else:
-            print(f"Initializing empty audio encoder: {cfg.audio_encoder_name}")
-            config = AutoConfig.from_pretrained(cfg.audio_encoder_name)
+            print(f"Initializing empty audio encoder: {cfg.cfg.audio_model_type}")
+            config = AutoConfig.from_pretrained(cfg.cfg.audio_model_type)
             self.audio_encoder = AutoModel.from_config(config)
 
         self.audio_encoder.to(self.device)
@@ -325,14 +325,14 @@ class AudioTransformer_from_HF():
         encoded = encoder_outputs.last_hidden_state
         return encoded
 
-    @classmethod
-    def from_pretrained(cls, cfg):
-        """从预训练权重加载（如果有的话）"""
-        # 这里可以实现从HuggingFace Hub加载预训练的音频模型
-        # 比如Wav2Vec2, Whisper等的编码器部分
-        from transformers import WhisperModel
+    # @classmethod
+    # def from_pretrained(cls, cfg):
+    #     """从预训练权重加载（如果有的话）"""
+    #     # 这里可以实现从HuggingFace Hub加载预训练的音频模型
+    #     # 比如Wav2Vec2, Whisper等的编码器部分
+    #     from transformers import WhisperModel
 
-        # processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3") # moved to AudioProcessor in porcessors.py
-        asr_model = WhisperModel.from_pretrained(cfg.audio_model_type)
+    #     # processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3") # moved to AudioProcessor in porcessors.py
+    #     asr_model = WhisperModel.from_pretrained(cfg.audio_model_type)
 
-        return asr_model.encoder
+    #     return asr_model.encoder

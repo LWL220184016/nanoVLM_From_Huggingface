@@ -36,9 +36,8 @@ class AlignmentCollator(object):
 
 
 class AudioQACollator(object):
-    def __init__(self, tokenizer, max_text_length):
+    def __init__(self, tokenizer):
         self.tokenizer = tokenizer
-        self.max_text_length = max_text_length
         if self.tokenizer.chat_template is None:
             raise ValueError("The tokenizer must have a chat_template.")
         self.audio_token_id = self.tokenizer.convert_tokens_to_ids('<AUDIO>')

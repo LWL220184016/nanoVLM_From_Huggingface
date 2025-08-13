@@ -17,6 +17,9 @@ Problem 2:
     Stats for Debug(AudioLanguageModel): Decoder Output Embeds = 
     : shape=torch.Size([1, 48, 2048]), dtype=torch.float32, min=-54.5876, max=48.1277, mean=0.0124
 
+    # 解決方法:
+        啓用 scaler，降低 batch_size，使用 float16，勉强把顯存壓倒 39GB 左右
+
 Problem 1(Fixed): 
     新版本會出這個錯誤, 要 logits 是 torch.Size([4, 1572, 49153] 和 target 是 torch.Size([4, 1572]) or 
                     要 logits 是 torch.Size([4, 1548, 49153] 和 target 是 torch.Size([4, 1548]) 才行
