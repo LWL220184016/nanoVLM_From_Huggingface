@@ -24,6 +24,7 @@ class AudioLanguageModel(nn.Module):
         self.cfg = cfg
         self.tokenizer = tokenizer
         self.print_debug = print_debug
+        self.device = device
 
         self.audio_encoder = AudioTransformer(cfg, device=device, load_from_HF=load_from_HF)
         if load_from_HF:
@@ -36,9 +37,6 @@ class AudioLanguageModel(nn.Module):
         self.MP = create_modality_projector(cfg)
         self.audio_token_id = self.tokenizer.convert_tokens_to_ids('<AUDIO>')
 
-        self.load_from_HF = load_from_HF
-        self.device = device
-
     def _prepare_decoder_inputs(self, input_ids, audio, attention_mask=None):
         """
         準備解碼器輸入。回傳：
@@ -46,60 +44,65 @@ class AudioLanguageModel(nn.Module):
         - audio_positions: 每筆樣本 <AUDIO> 的索引（在原始 input_ids 中）
         - audio_lens: 每筆樣本展開後音訊片段數 A
         """
+        input_ids = input_ids.to(self.device)
+        audio = audio.to(self.device)
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(self.device)
+
         batch_size = input_ids.shape[0]
 
         is_training = self.training
         with torch.set_grad_enabled(is_training and self.cfg.unfreeze_audio_encoder_when_training):
-            input_features = audio.to(self.device)
-            audio_features = self.audio_encoder.forward(input_features, output_hidden_states=True)
+            audio_features = self.audio_encoder.forward(audio, output_hidden_states=True)
 
         audio_embeds = self.MP(audio_features)  # [B, A, D]
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, T, D]
 
-        if self.print_debug:
-            debug_print_tensor_stats("\nDebug(AudioLanguageModel): Audio Embeds = \n", audio_embeds) # <--- 調試點 1
-            debug_print_tensor_stats("Debug(AudioLanguageModel): Text Embeds = \n", text_embeds) # <--- 調試點 1
+        # 尋找所有 <AUDIO> token 的位置
+        audio_token_mask = (input_ids == self.audio_token_id)
+        audio_positions = torch.where(audio_token_mask)[1]
+        
+        # 檢查每個樣本是否都有 <AUDIO> token
+        if not torch.all(audio_token_mask.sum(dim=1) == 1):
+            raise ValueError("Each sample in the batch must contain exactly one <AUDIO> token.")
 
-        final_embeds = []
-        final_attention_mask = []
-        audio_positions = []
-        audio_lens = []
+        A = audio_embeds.shape[1] # 音訊片段數
+        D = audio_embeds.shape[2] # embedding 維度
+        T = text_embeds.shape[1]  # 原始文本長度
+        L = T - 1 + A             # 拼接後的總長度
 
-        for i in range(batch_size):
-            audio_token_idx = (input_ids[i] == self.audio_token_id).nonzero(as_tuple=True)[0]
-            if len(audio_token_idx) == 0:
-                raise ValueError(f"<AUDIO> token not found in sample {i}. Check your data collator.")
-            pos = int(audio_token_idx[0].item())
-            A = int(audio_embeds[i].shape[0])
+        # 創建一個新的 embedding tensor 和 attention mask
+        final_embeds = torch.zeros(batch_size, L, D, device=self.device, dtype=text_embeds.dtype)
+        final_attention_mask = torch.zeros(batch_size, L, device=self.device, dtype=attention_mask.dtype) if attention_mask is not None else None
 
-            audio_positions.append(pos)
-            audio_lens.append(A)
+        # 創建索引來高效地填充張量
+        arange_batch = torch.arange(batch_size, device=self.device)
+        arange_L = torch.arange(L, device=self.device)
+        
+        # 填充 <AUDIO> 左側的文本
+        mask_before = arange_L.unsqueeze(0) < audio_positions.unsqueeze(1)
+        indices_before = torch.where(mask_before)
+        final_embeds[indices_before] = text_embeds[indices_before[0], indices_before[1]]
+        if final_attention_mask is not None:
+            final_attention_mask[indices_before] = attention_mask[indices_before[0], indices_before[1]]
 
-            current_embeds = torch.cat([
-                text_embeds[i, :pos],
-                audio_embeds[i],
-                text_embeds[i, pos + 1:]
-            ], dim=0)
-            final_embeds.append(current_embeds)
+        # 填充音訊部分
+        mask_audio = (arange_L.unsqueeze(0) >= audio_positions.unsqueeze(1)) & (arange_L.unsqueeze(0) < (audio_positions + A).unsqueeze(1))
+        indices_audio = torch.where(mask_audio)
+        final_embeds[indices_audio] = audio_embeds.view(-1, D)[(indices_audio[0] * A + (indices_audio[1] - audio_positions[indices_audio[0]]))]
+        if final_attention_mask is not None:
+            final_attention_mask[indices_audio] = 1
 
-            if attention_mask is not None:
-                audio_attn = torch.ones(A, device=self.device, dtype=attention_mask.dtype)
-                current_mask = torch.cat([
-                    attention_mask[i, :pos],
-                    audio_attn,
-                    attention_mask[i, pos + 1:]
-                ], dim=0)
-                final_attention_mask.append(current_mask)
+        # 填充 <AUDIO> 右側的文本
+        mask_after = arange_L.unsqueeze(0) >= (audio_positions + A).unsqueeze(1)
+        indices_after = torch.where(mask_after)
+        original_indices_after = indices_after[1] - A + 1
+        final_embeds[indices_after] = text_embeds[indices_after[0], original_indices_after]
+        if final_attention_mask is not None:
+            final_attention_mask[indices_after] = attention_mask[indices_after[0], original_indices_after]
 
-        inputs_embeds = torch.nn.utils.rnn.pad_sequence(final_embeds, batch_first=True)
-
-        combined_attention_mask = None
-        if attention_mask is not None:
-            combined_attention_mask = torch.nn.utils.rnn.pad_sequence(final_attention_mask, batch_first=True)
-
-        audio_positions = torch.tensor(audio_positions, device=inputs_embeds.device, dtype=torch.long)
-        audio_lens = torch.tensor(audio_lens, device=inputs_embeds.device, dtype=torch.long)
-        return inputs_embeds, combined_attention_mask, audio_positions, audio_lens
+        audio_lens = torch.full((batch_size,), A, device=self.device, dtype=torch.long)
+        return final_embeds, final_attention_mask, audio_positions, audio_lens
 
     def forward(self, input_ids, audio, attention_mask=None, labels=None):
         """
@@ -243,24 +246,25 @@ class AudioLanguageModel(nn.Module):
 
     @torch.no_grad()
     def generate(self, input_ids, audio, attention_mask=None, max_new_tokens=5, top_k=50, top_p=0.9, temperature=0.5, greedy=False):
-        """音频问答生成"""
+        """音频问答生成 (使用 KV Cache 提升效率)"""
         self.eval()
-        batch_size = input_ids.shape[0]
         
-        # 調用共享函數來準備初始輸入
-        current_sequence_embeds, current_attention_mask = self._prepare_decoder_inputs(
+        # 準備初始輸入
+        inputs_embeds, combined_attention_mask, _, _ = self._prepare_decoder_inputs(
             input_ids, audio, attention_mask
         )
         
-        generated_tokens_ids_list = [] 
+        # --- 建議修改 4: 使用 KV Cache ---
+        # 第一次 forward pass，獲取 past_key_values
+        outputs = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask, use_cache=True)
+        past_key_values = outputs.past_key_values
         
+        # 從最後一個 token 的 logits 開始生成
+        last_token_logits = self.decoder.head(outputs.last_hidden_state[:, -1, :])
+        
+        generated_tokens_ids_list = []
+
         for _ in range(max_new_tokens):
-            # 注意：這裡傳入的是已經準備好的 embeds
-            decoder_output_embeds, _ = self.decoder(x=current_sequence_embeds, attention_mask=current_attention_mask)
-            
-            last_token_embed_from_decoder = decoder_output_embeds[:, -1, :]
-            last_token_logits = self.decoder.head(last_token_embed_from_decoder)
-                
             if greedy:
                 next_token_id = torch.argmax(last_token_logits, dim=-1, keepdim=True)
             else:
@@ -270,16 +274,24 @@ class AudioLanguageModel(nn.Module):
             
             generated_tokens_ids_list.append(next_token_id)
             
-            # 檢查是否生成了 EOS token
             if next_token_id.item() == self.tokenizer.eos_token_id:
                 break
 
-            next_token_embed = self.decoder.token_embedding(next_token_id)
-            current_sequence_embeds = torch.cat((current_sequence_embeds, next_token_embed), dim=1)
+            # 後續的 forward pass 只需傳入新的 token_id 和 past_key_values
+            outputs = self.decoder(
+                input_ids=next_token_id, 
+                attention_mask=combined_attention_mask, # attention_mask 需要更新
+                past_key_values=past_key_values, 
+                use_cache=True
+            )
             
-            new_mask_segment = torch.ones(batch_size, 1, device=current_attention_mask.device, dtype=current_attention_mask.dtype)
-            current_attention_mask = torch.cat([current_attention_mask, new_mask_segment], dim=1)
-        
+            last_token_logits = self.decoder.head(outputs.last_hidden_state[:, -1, :])
+            past_key_values = outputs.past_key_values
+            
+            # 更新 attention_mask
+            new_mask_segment = torch.ones((combined_attention_mask.shape[0], 1), device=self.device, dtype=combined_attention_mask.dtype)
+            combined_attention_mask = torch.cat([combined_attention_mask, new_mask_segment], dim=1)
+
         generated_tokens_tensor = torch.cat(generated_tokens_ids_list, dim=1)
         return generated_tokens_tensor
 
