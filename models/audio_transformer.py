@@ -63,17 +63,15 @@ class AudioTransformer_from_HF():
         self.device = device
         
         if load_from_HF:
-            print(f"Loading audio encoder from Huggingface: {cfg.cfg.audio_model_type}")
-            self.audio_encoder = AutoModel.from_pretrained(cfg.cfg.audio_model_type)
+            print(f"Loading audio encoder from Huggingface: {cfg.audio_model_type}")
+            self.audio_encoder = AutoModel.from_pretrained(cfg.audio_model_type).encoder
             self.audio_encoder.eval()
         else:
-            print(f"Initializing empty audio encoder: {cfg.cfg.audio_model_type}")
-            config = AutoConfig.from_pretrained(cfg.cfg.audio_model_type)
+            print(f"Initializing empty audio encoder: {cfg.audio_model_type}")
+            config = AutoConfig.from_pretrained(cfg.audio_model_type)
             self.audio_encoder = AutoModel.from_config(config)
 
         self.audio_encoder.to(self.device)
-        self.datatype = torch.float32
-        
 
     def forward(self, audio, output_hidden_states=True):
         """

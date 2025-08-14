@@ -63,7 +63,7 @@ def main():
     try:
         audio_array, sr = librosa.load(args.audio, sr=16000)
         # 轉換為 torch tensor 並添加 batch 維度
-        audio_tensor = torch.tensor(audio_array, dtype=torch.float32)
+        audio_tensor = torch.tensor(audio_array, dtype=torch.float16)
         if audio_tensor.dim() == 1:
             audio_tensor = audio_tensor.unsqueeze(0)  # 添加 channel 維度
         

@@ -35,7 +35,7 @@ def make_toy_audio(alm_cfg, device, seconds=1.0, sr=16000, freq=440.0):
     # 產生 1 秒 440Hz 正弦波
     import numpy as np
     t = np.arange(0, int(seconds * sr)) / sr
-    wav = 0.1 * np.sin(2 * math.pi * freq * t).astype("float32")
+    wav = 0.1 * np.sin(2 * math.pi * freq * t).astype("float16")
 
     ap = get_audio_processor(alm_cfg)
     feats = ap(wav, sr).unsqueeze(0).to(device)  # [B=1, ...]
