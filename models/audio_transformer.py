@@ -85,6 +85,7 @@ class AudioTransformer_from_HF():
         # 產生音訊編碼 (encoder embeddings)
         with torch.no_grad():
             # 直接呼叫模型的 encoder
+            # print(f"Debug(AudioTransformer_from_HF): audio.dtype: {audio.dtype}")
             encoder_outputs = self.audio_encoder(audio, output_hidden_states=output_hidden_states)
 
         # 提取最後一層的隱藏狀態

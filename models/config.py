@@ -21,6 +21,7 @@ class ALMConfig:
     audio_hop_length: int = 160  # 跳跃长度
     audio_n_mels: int = 80  # 梅尔滤波器数量
     audio_max_length: int = 1500  # 最大时间步数
+    dtype = 'float16'
 
     unfreeze_audio_encoder_when_training: bool = False  # 是否在训练时解冻音频编码器
     use_gradient_checkpointing: bool = False
@@ -113,7 +114,7 @@ class TrainConfig:
     savee_batch_size: int = 8
 
     # epochs: int = 20
-    stage1_epochs: int = 30  
+    stage1_epochs: int = 23
     stage2_epochs: int = 12  
     stage3_epochs: int = 8  
 

@@ -28,7 +28,7 @@ def get_audio_processor(cfg):
     return AudioProcessor_from_HF(cfg)
 
 class AudioProcessor_from_HF:
-    def __init__(self, cfg):
+    def __init__(self, cfg, dtype=torch.float16):
         """
         音频处理器，使用 Hugging Face Transformers 的 processor。
         Args:
@@ -41,6 +41,7 @@ class AudioProcessor_from_HF:
 
         self.processor = AutoProcessor.from_pretrained(cfg.audio_model_type)
         self.target_feature_frames = cfg.audio_max_length  # Desired number of feature frames
+        self.dtype = dtype
 
         # Get parameters from the loaded feature extractor to ensure consistency
         if hasattr(self.processor, 'feature_extractor') and \
@@ -104,6 +105,7 @@ class AudioProcessor_from_HF:
         if processed_audio.ndim == 3 and processed_audio.shape[0] == 1:
             processed_audio = processed_audio.squeeze(0)
         
+        processed_audio = processed_audio.to(self.dtype)
         # print(f"Debug: Processed audio shape: {processed_audio.shape}")  # 调试输出
         del inputs
         return processed_audio
@@ -121,7 +123,8 @@ class AudioProcessor_from_HF:
         for path in audio_paths:
             # 从文件加载音频。sr=None 加载原始采样率，mono=True 确保单声道。
             # librosa.load 默认返回一个 np.ndarray (float32 类型) 和采样率。
-            audio_array, input_sr = librosa.load(path, sr=None, mono=True)
+            audio_array, input_sr = librosa.load(path, sr=None, mono=True, dtype=np.float16)
+            # print(f"Debug(AudioProcessor_from_HF): audio_array.dtype: {audio_array.dtype}")
             
             # 调用 __call__ 方法处理单个音频
             features = self(audio_array, input_sr)
