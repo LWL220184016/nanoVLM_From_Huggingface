@@ -26,7 +26,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 torch.autograd.set_detect_anomaly(True)
 
-device = "cpu"
+device = ALMConfig.device
 print(f"Using device: {device}")
 
 

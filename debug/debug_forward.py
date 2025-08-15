@@ -35,7 +35,7 @@ def make_toy_audio(alm_cfg, device, seconds=1.0, sr=16000, freq=440.0):
     # 產生 1 秒 440Hz 正弦波
     import numpy as np
     t = np.arange(0, int(seconds * sr)) / sr
-    wav = 0.1 * np.sin(2 * math.pi * freq * t).astype("float16")
+    wav = 0.1 * np.sin(2 * math.pi * freq * t).astype("float32")
 
     ap = get_audio_processor(alm_cfg)
     feats = ap(wav, sr).unsqueeze(0).to(device)  # [B=1, ...]
@@ -89,11 +89,12 @@ def inspect_after_prepare(model, input_ids, audio, attention_mask, labels, token
     return inputs_embeds, combined_attention_mask, audio_positions, audio_lens, li_expanded
 
 def run():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("device:", device)
+    
 
     alm_cfg = ALMConfig()
     tokenizer = get_tokenizer(alm_cfg.lm_tokenizer)
+    device = alm_cfg.device
+    print(f"Using device: {device}")
 
     # 構建模型（會自動新增 <AUDIO> 並調整詞嵌入）
     model = AudioLanguageModel(alm_cfg, load_from_HF=True, tokenizer=tokenizer, device=device).to(device)

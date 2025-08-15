@@ -19,22 +19,22 @@ from safetensors.torch import load_model, save_model
 from debug.debug_func import debug_print_tensor_stats
 
 class AudioLanguageModel(nn.Module):
-    def __init__(self, cfg: ALMConfig, load_from_HF=True, tokenizer=None, device=None, print_debug=False):
+    def __init__(self, cfg: ALMConfig, load_from_HF=True, tokenizer=None, print_debug=False):
         super().__init__()
         self.cfg = cfg
         self.tokenizer = tokenizer
         self.print_debug = print_debug
-        self.device = device
+        self.device = cfg.device
 
-        self.audio_encoder = AudioTransformer(cfg, device=device, load_from_HF=load_from_HF)
+        self.audio_encoder = AudioTransformer(cfg, load_from_HF=load_from_HF)
         if load_from_HF:
             print("Loading from backbone weights")
-            self.decoder = LanguageModel.from_huggingface_pretrained(cfg)
+            self.decoder = LanguageModel.from_huggingface_pretrained(cfg).to(self.device)
         else:
-            self.decoder = LanguageModel(cfg)
+            self.decoder = LanguageModel(cfg).to(self.device)
                 
         self.decoder.resize_token_embeddings(len(self.tokenizer))
-        self.MP = create_modality_projector(cfg)
+        self.MP = create_modality_projector(cfg).to(self.device)
         self.audio_token_id = self.tokenizer.convert_tokens_to_ids('<AUDIO>')
 
     def _prepare_decoder_inputs(self, input_ids, audio, attention_mask=None):

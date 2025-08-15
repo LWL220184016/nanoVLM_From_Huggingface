@@ -56,12 +56,12 @@ class AudioTransformer_from_NeMo():
     
 class AudioTransformer_from_HF():
     """完整的音频Transformer编码器"""
-    def __init__(self, cfg, device, load_from_HF):
+    def __init__(self, cfg, load_from_HF):
         from transformers import AutoConfig, AutoModel
         super().__init__()
         self.cfg = cfg
-        self.device = device
-        
+        self.device = cfg.device
+
         if load_from_HF:
             print(f"Loading audio encoder from Huggingface: {cfg.audio_model_type}")
             self.audio_encoder = AutoModel.from_pretrained(cfg.audio_model_type).encoder

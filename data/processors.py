@@ -28,7 +28,7 @@ def get_audio_processor(cfg):
     return AudioProcessor_from_HF(cfg)
 
 class AudioProcessor_from_HF:
-    def __init__(self, cfg, dtype=torch.float16):
+    def __init__(self, cfg):
         """
         音频处理器，使用 Hugging Face Transformers 的 processor。
         Args:
@@ -41,7 +41,7 @@ class AudioProcessor_from_HF:
 
         self.processor = AutoProcessor.from_pretrained(cfg.audio_model_type)
         self.target_feature_frames = cfg.audio_max_length  # Desired number of feature frames
-        self.dtype = dtype
+        self.dtype = cfg.dtype
 
         # Get parameters from the loaded feature extractor to ensure consistency
         if hasattr(self.processor, 'feature_extractor') and \

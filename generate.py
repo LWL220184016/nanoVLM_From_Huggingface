@@ -10,6 +10,7 @@ if torch.cuda.is_available():
 
 from models.audio_language_model import AudioLanguageModel
 from data.processors import get_tokenizer, get_audio_processor
+from models.config import ALMConfig
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -39,12 +40,7 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    device = ALMConfig.device
     print(f"Using device: {device}")
 
     source = args.checkpoint if args.checkpoint else args.hf_model

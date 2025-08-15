@@ -1,4 +1,25 @@
+import torch
 from dataclasses import dataclass
+
+def get_device():
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        try:
+            import torch_xla
+            import torch_xla.core.xla_model as xm
+
+            device = xm.xla_device()
+        except ImportError:
+            device = "cpu"
+    print(f"Using device: {device}")
+
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+    return device
 
 @dataclass
 class ALMConfig:
@@ -21,10 +42,11 @@ class ALMConfig:
     audio_hop_length: int = 160  # 跳跃长度
     audio_n_mels: int = 80  # 梅尔滤波器数量
     audio_max_length: int = 1500  # 最大时间步数
-    dtype = 'float16'
 
     unfreeze_audio_encoder_when_training: bool = False  # 是否在训练时解冻音频编码器
     use_gradient_checkpointing: bool = False
+    dtype = torch.float32 # because openAI whisper using float32
+    device = get_device()
     # ========== 语言模型配置选项 ==========
     # 选项1: SmolLM2-135M (当前使用，较小)
     # lm_hidden_dim: int = 576
@@ -134,3 +156,4 @@ class TrainConfig:
     train_dataset_path: str = 'MLCommons/peoples_speech'
     train_dataset_name: tuple[str, ...] = ('clean_sa', ) # small, medium
     test_dataset_path: str = "AbstractTTS/SAVEE"
+
