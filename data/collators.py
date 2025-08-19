@@ -80,12 +80,13 @@ class AudioQACollator(object):
             batch_first=True, 
             padding_value=self.tokenizer.pad_token_id
         )
-        labels = torch.nn.utils.rnn.pad_sequence(
-            all_final_labels, 
-            batch_first=True, 
-            padding_value=-100
-        )
-        
+        # labels = torch.nn.utils.rnn.pad_sequence(
+        #     all_final_labels, 
+        #     batch_first=True, 
+        #     padding_value=-100
+        # )
+        labels = all_final_labels
+
         # 6. 創建 attention_mask
         # 注意：attention_mask 是基於填充後的 input_ids 創建的
         attention_mask = (input_ids != self.tokenizer.pad_token_id).long()

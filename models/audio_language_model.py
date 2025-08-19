@@ -57,6 +57,12 @@ class AudioLanguageModel(nn.Module):
 
         audio_embeds = self.MP(audio_features)  # [B, A, D]
         text_embeds = self.decoder.token_embedding(input_ids)  # [B, T, D]
+        
+        # Debug
+        if self.print_debug:
+            print("Debug(AudioLanguageModel): text_embeds: ", text_embeds.size())  # 調試輸出
+            print("Debug(AudioLanguageModel): audio_embeds: ", audio_embeds.size())  # 調試輸出
+
 
         # 尋找所有 <AUDIO> token 的位置
         audio_token_mask = (input_ids == self.audio_token_id)
@@ -107,8 +113,8 @@ class AudioLanguageModel(nn.Module):
     def forward(self, input_ids, audio, attention_mask=None, labels=None):
         """
         訓練時調用：
-        - labels 只應該為 assistant 回覆可學，其餘（系統/使用者/pad）為 -100（由 collator 負責）
-        - 這裡在 <AUDIO> 位置插入 A 個 -100，讓 labels 與展開後序列等長
+        - 若 labels 是「答案Only」(音頻轉錄的token序列)，我們不在中間插入 -100，而是將整段答案
+          連續對齊到展開後序列的尾端（或你指定的起點），其餘位置以 -100 忽略
         - 使用 next-token shift 計算損失
         """
         inputs_embeds, combined_attention_mask, audio_positions, audio_lens = self._prepare_decoder_inputs(
@@ -116,46 +122,44 @@ class AudioLanguageModel(nn.Module):
         )
 
         decoder_output_embeds, _ = self.decoder(x=inputs_embeds, attention_mask=combined_attention_mask)
-        
-        
-        
         logits = self.decoder.head(decoder_output_embeds)  # [B, L, V]
 
         if labels is not None:
             B = input_ids.size(0)
+            L = logits.size(1)
             expanded_labels = []
-            for i in range(B):
-                li = labels[i]                 # 與原始 input_ids 同長
-                pos = int(audio_positions[i])
-                A = int(audio_lens[i])
 
-                left = li[:pos]
-                right = li[pos + 1:]           # 去掉 <AUDIO>
-                audio_ign = torch.full((A,), -100, dtype=li.dtype, device=li.device)
-                li_expanded = torch.cat([left, audio_ign, right], dim=0)
+            for i in range(B):
+                pos = int(audio_positions[i].item())   # <AUDIO> 在原始 input_ids 的位置
+                A   = int(audio_lens[i].item())        # 插入的音頻片段長度
+                li  = labels[i]                        # 若是「答案Only」，shape 為 [S]
+
+                # 構造展開後長度的 base 標籤，先全部忽略
+                li_expanded = torch.full((L,), -100, dtype=li.dtype, device=li.device)
+
+                # 將整段答案連續貼在序列尾端（避免把答案切斷）
+                # 你也可以改成：start = pos + A + right_prompt_len（若你知道音頻後的文字前綴長度）
+                S = li.numel()
+                start = max(0, L - S)
+                li_expanded[start:start + S] = li
+
                 expanded_labels.append(li_expanded)
-                
+
                 # Debug
                 if self.print_debug:
                     debug_print_tensor_stats("Debug(AudioLanguageModel): Input Embeds = \n", inputs_embeds) # <--- 調試點 1
                     debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
                     
+                    print("Debug(AudioLanguageModel): input_ids: ", input_ids.size(), "input_ids: ", input_ids)  # 調試輸出
                     print("Debug(AudioLanguageModel): labels: ", li.size(), "li: ", li)  # 調試輸出
                     print(f"Debug(AudioLanguageModel): <AUDIO> pos: {pos}, A (audio patches): {audio_lens[i].item()}")
                     print("Debug(AudioLanguageModel): A: ", A)
-                    print("Debug(AudioLanguageModel): left: ", left.size(), "left: ", left)
-                    print("Debug(AudioLanguageModel): right: ", right.size(), "right: ", right)
-                    print("Debug(AudioLanguageModel): audio_ign: ", audio_ign.size(), "audio_ign: ", audio_ign)
+                    print("Debug(AudioLanguageModel):   S: ",  S.size(), "   S: ",   S)
+                    print("Debug(AudioLanguageModel): start: ", start.size(), "start: ", start)
+                    # print("Debug(AudioLanguageModel): audio_ign: ", audio_ign.size(), "audio_ign: ", audio_ign)
                     print("Debug(AudioLanguageModel): li_expanded: ", li_expanded.size(), "li_expanded: ", li_expanded)
 
-            combined_labels = torch.nn.utils.rnn.pad_sequence(expanded_labels, batch_first=True, padding_value=-100)
-
-            # 與 logits 對齊（通常已對齊；保底處理）
-            if combined_labels.size(1) < logits.size(1):
-                pad = logits.size(1) - combined_labels.size(1)
-                combined_labels = F.pad(combined_labels, (0, pad), value=-100)
-            elif combined_labels.size(1) > logits.size(1):
-                combined_labels = combined_labels[:, :logits.size(1)]
+            combined_labels = torch.stack(expanded_labels, dim=0)  # [B, L]
 
             # next-token shift
             shift_logits = logits[:, :-1, :].contiguous()
@@ -165,9 +169,7 @@ class AudioLanguageModel(nn.Module):
                 shift_labels.view(-1),
                 ignore_index=-100
             )
-            print("labels: ", shift_labels)
             return logits, loss
-
 
         return logits
 

@@ -97,7 +97,7 @@ def run():
     print(f"Using device: {device}")
 
     # 構建模型（會自動新增 <AUDIO> 並調整詞嵌入）
-    model = AudioLanguageModel(alm_cfg, load_from_HF=True, tokenizer=tokenizer, device=device).to(device)
+    model = AudioLanguageModel(alm_cfg, load_from_HF=True, tokenizer=tokenizer)
     model.eval()
 
     # 造一條 toy 輸入與對應 labels（labels 僅保留 assistant 段為可學，其餘為 -100）
