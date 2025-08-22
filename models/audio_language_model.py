@@ -60,8 +60,8 @@ class AudioLanguageModel(nn.Module):
         
         # Debug
         if self.print_debug:
-            print("Debug(AudioLanguageModel): text_embeds: ", text_embeds.size())  # 調試輸出
-            print("Debug(AudioLanguageModel): audio_embeds: ", audio_embeds.size())  # 調試輸出
+            print("Debug(AudioLanguageModel._prepare_decoder_inputs): text_embeds: ", text_embeds.size())  # 調試輸出
+            print("Debug(AudioLanguageModel._prepare_decoder_inputs): audio_embeds: ", audio_embeds.size())  # 調試輸出
 
 
         # 尋找所有 <AUDIO> token 的位置
@@ -134,30 +134,25 @@ class AudioLanguageModel(nn.Module):
                 A   = int(audio_lens[i].item())        # 插入的音頻片段長度
                 li  = labels[i]                        # 若是「答案Only」，shape 為 [S]
 
-                # 構造展開後長度的 base 標籤，先全部忽略
-                li_expanded = torch.full((L,), -100, dtype=li.dtype, device=li.device)
-
-                # 將整段答案連續貼在序列尾端（避免把答案切斷）
-                # 你也可以改成：start = pos + A + right_prompt_len（若你知道音頻後的文字前綴長度）
-                S = li.numel()
-                start = max(0, L - S)
-                li_expanded[start:start + S] = li
-
+                tensor = torch.full((pos + A-2,), -100).to(self.device)
+                li_expanded = torch.cat([tensor, li], dim=0)  # 在音頻前面插入 -100
                 expanded_labels.append(li_expanded)
 
                 # Debug
                 if self.print_debug:
-                    debug_print_tensor_stats("Debug(AudioLanguageModel): Input Embeds = \n", inputs_embeds) # <--- 調試點 1
-                    debug_print_tensor_stats("Debug(AudioLanguageModel): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
+                    print("")
+                    debug_print_tensor_stats("Debug(AudioLanguageModel.forward): Input Embeds = \n", inputs_embeds) # <--- 調試點 1
+                    debug_print_tensor_stats("Debug(AudioLanguageModel.forward): Decoder Output Embeds = \n", decoder_output_embeds) # <--- 調試點 1
                     
-                    print("Debug(AudioLanguageModel): input_ids: ", input_ids.size(), "input_ids: ", input_ids)  # 調試輸出
-                    print("Debug(AudioLanguageModel): labels: ", li.size(), "li: ", li)  # 調試輸出
-                    print(f"Debug(AudioLanguageModel): <AUDIO> pos: {pos}, A (audio patches): {audio_lens[i].item()}")
-                    print("Debug(AudioLanguageModel): A: ", A)
-                    print("Debug(AudioLanguageModel):   S: ",  S.size(), "   S: ",   S)
-                    print("Debug(AudioLanguageModel): start: ", start.size(), "start: ", start)
-                    # print("Debug(AudioLanguageModel): audio_ign: ", audio_ign.size(), "audio_ign: ", audio_ign)
-                    print("Debug(AudioLanguageModel): li_expanded: ", li_expanded.size(), "li_expanded: ", li_expanded)
+                    print("Debug(AudioLanguageModel.forward): input_ids: ", input_ids.size(), "input_ids: ", input_ids)  # 調試輸出
+                    print("Debug(AudioLanguageModel.forward): labels: ", li.size(), "li: ", li)  # 調試輸出
+                    print(f"Debug(AudioLanguageModel.forward): <AUDIO> pos: {pos}, A (audio patches): {audio_lens[i].item()}")
+                    print("Debug(AudioLanguageModel.forward): A: ", A)
+                    print("Debug(AudioLanguageModel.forward): S: ", S.size(), " S: ", S)
+                    print("Debug(AudioLanguageModel.forward): start: ", start.size(), "start: ", start)
+                    # print("Debug(AudioLanguageModel.forward): audio_ign: ", audio_ign.size(), "audio_ign: ", audio_ign)
+                    print("Debug(AudioLanguageModel.forward): li_expanded: ", li_expanded.size(), "li_expanded: ", li_expanded)
+                    print("")
 
             combined_labels = torch.stack(expanded_labels, dim=0)  # [B, L]
 
